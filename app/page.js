@@ -1,69 +1,84 @@
-import Image from "next/image";
+import Link from "next/link";
+import { Icon } from "@/components/icons";
+
+const panels = [
+  {
+    href: "/admin/login",
+    icon: "shield",
+    tone: "text-emerald",
+    ring: "border-emerald/25 hover:border-emerald/50",
+    title: "Panel 1 — Admin",
+    desc: "Kelola Sub ID, reset password Panel 2 & 3, ganti password admin.",
+    badge: "Password Admin",
+  },
+  {
+    href: "/panel/login",
+    icon: "link",
+    tone: "text-sky-400",
+    ring: "border-sky-500/25 hover:border-sky-400/50",
+    title: "Panel 2 — Generate Link",
+    desc: "Buat link single & bulk untuk Sub ID kamu. Sub ID otomatis tertanam.",
+    badge: "Password per Sub ID",
+  },
+  {
+    href: "/monitor/login",
+    icon: "monitor",
+    tone: "text-amber-400",
+    ring: "border-amber-500/25 hover:border-amber-400/50",
+    title: "Panel 3 — Realtime Monitor",
+    desc: "Pantau live traffic & conversion semua Sub ID secara realtime.",
+    badge: "Password Bersama",
+  },
+];
 
 export default function Home() {
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.js
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <main className="min-h-screen flex flex-col items-center justify-center px-6 py-16 relative">
+      <div className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div className="absolute -top-40 left-1/2 -translate-x-1/2 w-[600px] h-[400px] rounded-full bg-emerald/10 blur-3xl" />
+      </div>
+      <div className="relative text-center mb-12">
+        <div className="inline-flex items-center gap-2 mb-4 text-emerald">
+          <Icon name="bolt" className="w-8 h-8" />
+          <span className="font-bold text-2xl tracking-tight">CPA Link Panel</span>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+        <h1 className="text-3xl lg:text-4xl font-bold max-w-2xl mx-auto">
+          3 Panel Terpisah — Semua Berbasis Password
+        </h1>
+        <p className="text-muted mt-3 max-w-xl mx-auto text-sm">
+          Admin, Generate Link & Bulk, dan Realtime Monitor. Frontend preview dengan data mock.
+        </p>
+      </div>
+
+      <div className="relative grid md:grid-cols-3 gap-5 w-full max-w-5xl">
+        {panels.map((p) => (
+          <Link
+            key={p.href}
+            href={p.href}
+            className={`group bg-surface border rounded-2xl p-6 flex flex-col gap-4 transition-all hover:-translate-y-1 ${p.ring}`}
           >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+            <div className="flex items-center justify-between">
+              <div className={`w-11 h-11 rounded-xl bg-emerald/10 border border-emerald/25 flex items-center justify-center ${p.tone}`}>
+                <Icon name={p.icon} className="w-6 h-6" />
+              </div>
+              <span className="text-xs font-bold text-muted group-hover:text-foreground transition-colors">
+                <Icon name="arrow" className="w-4 h-4" />
+              </span>
+            </div>
+            <div>
+              <div className="font-bold">{p.title}</div>
+              <p className="text-sm text-muted mt-1.5 leading-relaxed">{p.desc}</p>
+            </div>
+            <span className="inline-flex self-start items-center px-2.5 py-1 rounded-full text-[11px] font-bold border bg-emerald/10 text-emerald border-emerald/30">
+              {p.badge}
+            </span>
+          </Link>
+        ))}
+      </div>
+
+      <p className="relative mt-12 text-xs text-muted/60">
+        Frontend Preview (Mock Data) — backend Supabase menyusul
+      </p>
+    </main>
   );
 }
