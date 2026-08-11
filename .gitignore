@@ -57,6 +57,11 @@ Thumbs.db
 # vercel
 .vercel
 
+# cloudflare workers / opennext
+.open-next/
+.wrangler/
+.dev.vars
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
