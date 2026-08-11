@@ -25,12 +25,12 @@ export async function GET() {
   if (!session) return error("Belum login.", 401);
 
   const supabase = supabaseAdmin();
-  const { data: panel, error } = await supabase
+  const { data: panel, error: dbError } = await supabase
     .from("panels")
     .select("id, sub_id, panel_name, smartlink_url, is_active")
     .eq("id", session.panel_id)
     .maybeSingle();
-  if (error || !panel || !panel.is_active) return error("Sesi tidak valid.", 401);
+  if (dbError || !panel || !panel.is_active) return error("Sesi tidak valid.", 401);
 
   return json({ ok: true, session: sessionPayload(panel) });
 }
