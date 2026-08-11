@@ -32,11 +32,8 @@ function rangeBounds(range, from, to) {
   }
 }
 
-function aggregateReport(subIdList, trafficRows, convRows) {
+function aggregateReport(trafficRows, convRows) {
   const map = new Map();
-  (subIdList || []).forEach((sub) => {
-    map.set(sub, { sub_id: sub, network_name: "Trafee", clicks: 0, conversions: 0, earning: 0 });
-  });
   trafficRows.forEach((t) => {
     if (!t.sub_id) return;
     const cur = map.get(t.sub_id) || { sub_id: t.sub_id, network_name: "Trafee", clicks: 0, conversions: 0, earning: 0 };
@@ -134,7 +131,7 @@ export async function GET(request) {
   ]);
 
   const [reportTraffic, reportConvs] = reportRes;
-  const report = aggregateReport(subIds, reportTraffic.data || [], reportConvs.data || []);
+  const report = aggregateReport(reportTraffic.data || [], reportConvs.data || []);
 
   const rangeConvs = (reportConvs.data || []).filter((c) => !subId || subId === "all" || c.sub_id === subId);
 

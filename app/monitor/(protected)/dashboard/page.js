@@ -105,7 +105,7 @@ function ReportView() {
     setRange(key);
   };
 
-  const total = data.reduce(
+  const total = (data || []).reduce(
     (s, r) => ({ clicks: s.clicks + r.clicks, conversions: s.conversions + r.conversions, earning: s.earning + r.earning }),
     { clicks: 0, conversions: 0, earning: 0 }
   );
@@ -151,7 +151,7 @@ function ReportView() {
         <StatCard icon="chart" label="Total Click" value={formatNumber(total.clicks)} sub={formatRange(from, to)} tone="violet" />
         <StatCard icon="bolt" label="Conversion" value={formatNumber(total.conversions)} sub={`CR ${crOf(total.conversions, total.clicks)}%`} tone="emerald" />
         <StatCard icon="wallet" label="Payout" value={formatCurrency(total.earning, currency)} sub={`≈ ${formatCurrency(total.earning, currency === "USD" ? "IDR" : "USD")}`} tone="amber" />
-        <StatCard icon="users" label="Sub ID" value={formatNumber(data.length)} sub="All Sub ID" tone="sky" />
+        <StatCard icon="users" label="Sub ID" value={formatNumber((data || []).length)} sub="All Sub ID" tone="sky" />
       </div>
 
       <section className="bg-surface border border-line rounded-xl overflow-hidden">
