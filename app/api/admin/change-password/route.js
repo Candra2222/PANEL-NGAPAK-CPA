@@ -22,7 +22,7 @@ export async function POST(request) {
   const { data, error: loadError } = await supabase
     .from("admin_access")
     .select("id, password_hash")
-    .order("created_at", { ascending: false })
+    .order("updated_at", { ascending: false })
     .limit(1)
     .maybeSingle();
   if (loadError) return error("Gagal memuat kredensial.", 500);
