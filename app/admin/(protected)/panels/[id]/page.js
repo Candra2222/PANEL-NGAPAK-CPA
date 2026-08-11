@@ -185,7 +185,7 @@ export default function PanelDetail() {
                     <td className="px-5 py-3 text-right tabular-nums">{formatNumber(r.clicks)}</td>
                     <td className="px-5 py-3 text-xs text-muted">{new Date(r.created_at).toLocaleDateString("id-ID")}</td>
                     <td className="px-5 py-3 text-right">
-                      <CopyButton text={fullLink(r.slug)} />
+                      <CopyButton text={fullLink(r.slug, r.domain || (typeof window !== "undefined" ? window.location.host : ""))} />
                     </td>
                   </tr>
                 ))}

@@ -4,23 +4,28 @@ import { comparePassword } from "@/lib/password";
 import { createSession } from "@/lib/session";
 import { checkRateLimit, clientIp } from "@/lib/rate-limit";
 
-function sessionPayload(p) {
+function sessionPayload(p, request) {
   return {
     panel_id: p.id,
     sub_id: p.sub_id,
     panel_name: p.panel_name,
     smartlink_url: p.smartlink_url,
-    domains: redirectDomains(),
+    domains: redirectDomains(request),
   };
 }
 
-function redirectDomains() {
+function redirectDomains(request) {
   const env = process.env.REDIRECT_DOMAINS;
   if (env) return env.split(",").map((d) => d.trim()).filter(Boolean);
-  return [process.env.REDIRECT_DOMAIN || "go.panel-cpa.id"];
+  if (process.env.REDIRECT_DOMAIN) return [process.env.REDIRECT_DOMAIN];
+  try {
+    return [new URL(request.url).host];
+  } catch {
+    return [];
+  }
 }
 
-export async function GET() {
+export async function GET(request) {
   const { session } = await requireSession("panel");
   if (!session) return error("Belum login.", 401);
 
@@ -32,7 +37,7 @@ export async function GET() {
     .maybeSingle();
   if (dbError || !panel || !panel.is_active) return error("Sesi tidak valid.", 401);
 
-  return json({ ok: true, session: sessionPayload(panel) });
+  return json({ ok: true, session: sessionPayload(panel, request) });
 }
 
 export async function POST(request) {
@@ -77,6 +82,6 @@ export async function POST(request) {
     sub_id: matched.sub_id,
     panel_name: matched.panel_name,
   });
-  const response = json({ ok: true, session: sessionPayload(matched) });
+  const response = json({ ok: true, session: sessionPayload(matched, request) });
   return setSessionCookie(response, "panel", token);
 }

@@ -19,7 +19,7 @@ export default function PanelDashboard() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
 
-  const domains = session.domains?.length ? session.domains : ["go.panel-cpa.id"];
+  const domains = session.domains?.length ? session.domains : [typeof window !== "undefined" ? window.location.host : ""].filter(Boolean);
   const defaultDomain = domains[0];
 
   const [tab, setTab] = useState("single");
@@ -204,6 +204,9 @@ export default function PanelDashboard() {
                     domains={domains}
                   />
                 </Field>
+                <p className="text-[11px] text-muted/70 -mt-3">
+                  Domain default gratis Cloudflare (workers.dev) — custom domain bisa ditambahkan admin nanti.
+                </p>
                 <RedirectModeField value={single.redirect_mode} onChange={(v) => setSingle({ ...single, redirect_mode: v })} />
                 <Field label="OG Title">
                   <input value={single.og_title} onChange={(e) => setSingle({ ...single, og_title: e.target.value })} placeholder="Judul preview saat dibagikan" className={inputCls} />
@@ -239,6 +242,9 @@ export default function PanelDashboard() {
                     />
                   </Field>
                 </div>
+                <p className="text-[11px] text-muted/70 -mt-2">
+                  Domain default gratis Cloudflare (workers.dev) — custom domain bisa ditambahkan admin nanti.
+                </p>
                 <RedirectModeField value={bulk.redirect_mode} onChange={(v) => setBulk({ ...bulk, redirect_mode: v })} />
                 <p className="text-xs text-muted -mt-1">
                   Cukup set jumlah link & pilih domain — {Math.max(1, parseInt(bulk.count, 10) || 1)} link langsung dibuat dengan slug acak, Sub ID & Smartlink otomatis tertanam.

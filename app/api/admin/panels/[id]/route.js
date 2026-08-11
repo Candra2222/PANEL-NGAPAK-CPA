@@ -20,7 +20,7 @@ export async function GET(_request, { params }) {
 
   const { data: redirects, error: redirectsError } = await supabase
     .from("redirects")
-    .select("id, slug, link_name, destination_url, clicks, created_at")
+    .select("id, slug, link_name, destination_url, domain, clicks, created_at")
     .eq("panel_id", id)
     .order("created_at", { ascending: false });
   if (redirectsError) return error("Gagal memuat link.", 500);
