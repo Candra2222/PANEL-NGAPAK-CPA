@@ -32,6 +32,24 @@ function rangeBounds(range, from, to) {
   }
 }
 
+async function fetchRangeRows(supabase, table, columns, fromISO, toISO) {
+  const page = 1000;
+  const all = [];
+  let start = 0;
+  for (;;) {
+    const { data, error } = await supabase
+      .from(table)
+      .select(columns)
+      .gte("created_at", fromISO)
+      .lte("created_at", toISO)
+      .range(start, start + page - 1);
+    if (error) return { data: all, error };
+    all.push(...(data || []));
+    if (!data || data.length < page) return { data: all };
+    start += page;
+  }
+}
+
 function aggregateReport(subIdList, trafficRows, convRows) {
   const map = new Map();
   (subIdList || []).forEach((sub) => {
@@ -120,8 +138,8 @@ export async function GET(request) {
 
   const [reportRes, topTodayRes, topCountriesRes] = await Promise.all([
     Promise.all([
-      supabase.from("traffic_logs").select("sub_id").gte("created_at", fromISO).lte("created_at", toISO),
-      supabase.from("conversions").select("sub_id, earning").gte("created_at", fromISO).lte("created_at", toISO),
+      fetchRangeRows(supabase, "traffic_logs", "sub_id", fromISO, toISO),
+      fetchRangeRows(supabase, "conversions", "sub_id, earning", fromISO, toISO),
     ]),
     supabase
       .from("conversions")
