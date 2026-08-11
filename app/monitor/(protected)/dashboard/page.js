@@ -350,7 +350,7 @@ function RealtimeView() {
         const ts = new Date(c.created_at).getTime();
         return ts >= cutoff && ts < upper;
       })
-      .slice(0, 60);
+      .slice(0, 200);
   }, [allConvs, range, filterSubId]);
 
   const totalClicks = base.totals.clicks + liveCount;
@@ -495,7 +495,7 @@ function RealtimeView() {
                 </tr>
               </thead>
               <tbody>
-                {filteredConvs.slice(0, 10).map((c, i) => (
+                {filteredConvs.map((c, i) => (
                   <tr key={c.id} className="border-b border-line/50 last:border-0 hover:bg-emerald/5">
                     <td className="px-5 py-3 text-muted tabular-nums text-xs">{i + 1}</td>
                     <td className="px-5 py-3">

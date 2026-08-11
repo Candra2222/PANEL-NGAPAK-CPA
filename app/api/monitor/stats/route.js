@@ -32,14 +32,19 @@ function rangeBounds(range, from, to) {
   }
 }
 
-function aggregateReport(trafficRows, convRows) {
+function aggregateReport(subIdList, trafficRows, convRows) {
   const map = new Map();
+  (subIdList || []).forEach((sub) => {
+    map.set(sub, { sub_id: sub, network_name: "Trafee", clicks: 0, conversions: 0, earning: 0 });
+  });
   trafficRows.forEach((t) => {
+    if (!t.sub_id) return;
     const cur = map.get(t.sub_id) || { sub_id: t.sub_id, network_name: "Trafee", clicks: 0, conversions: 0, earning: 0 };
     cur.clicks += 1;
     map.set(t.sub_id, cur);
   });
   convRows.forEach((c) => {
+    if (!c.sub_id) return;
     const cur = map.get(c.sub_id) || { sub_id: c.sub_id, network_name: "Trafee", clicks: 0, conversions: 0, earning: 0 };
     cur.conversions += 1;
     cur.earning += Number(c.earning) || 0;
@@ -78,7 +83,7 @@ export async function GET(request) {
       .gte("created_at", fromISO)
       .lte("created_at", toISO)
       .order("created_at", { ascending: false })
-      .limit(60),
+      .limit(200),
     supabase.from("panels").select("sub_id"),
     supabase.from("redirects").select("id, destination_url, sub_id"),
   ]);
@@ -113,7 +118,7 @@ export async function GET(request) {
   }
   const [trafficCount, convCount] = await Promise.all([countTraffic, countConvs]);
 
-  const [reportRes, topTodayRes, topCountriesRes, todayConvSumRes] = await Promise.all([
+  const [reportRes, topTodayRes, topCountriesRes] = await Promise.all([
     Promise.all([
       supabase.from("traffic_logs").select("sub_id").gte("created_at", fromISO).lte("created_at", toISO),
       supabase.from("conversions").select("sub_id, earning").gte("created_at", fromISO).lte("created_at", toISO),
@@ -126,14 +131,10 @@ export async function GET(request) {
       .from("conversions")
       .select("country")
       .gte("created_at", todayISO),
-    supabase
-      .from("traffic_logs")
-      .select("country")
-      .gte("created_at", todayISO),
   ]);
 
   const [reportTraffic, reportConvs] = reportRes;
-  const report = aggregateReport(reportTraffic.data || [], reportConvs.data || []);
+  const report = aggregateReport(subIds, reportTraffic.data || [], reportConvs.data || []);
 
   const rangeConvs = (reportConvs.data || []).filter((c) => !subId || subId === "all" || c.sub_id === subId);
 
@@ -151,9 +152,6 @@ export async function GET(request) {
 
   const countryMap = new Map();
   (topCountriesRes.data || []).forEach((c) => {
-    if (c.country) countryMap.set(c.country, (countryMap.get(c.country) || 0) + 1);
-  });
-  (todayConvSumRes.data || []).forEach((c) => {
     if (c.country) countryMap.set(c.country, (countryMap.get(c.country) || 0) + 1);
   });
   const topCountries = [...countryMap.entries()]
