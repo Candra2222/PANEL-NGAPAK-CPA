@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useContext } from "react";
 import PageHeader from "@/components/PageHeader";
 import Badge from "@/components/Badge";
@@ -8,12 +8,16 @@ import StatCard from "@/components/StatCard";
 import { Icon } from "@/components/icons";
 import { pushToast } from "@/components/ToastStack";
 import { MonitorCtx } from "../monitor-context";
-import { DeviceLogo, AppLogo, CountryFlag } from "@/components/BrandLogo";
+import { DeviceLogo, BrowserLogo, CountryFlag } from "@/components/BrandLogo";
 import { FaCrown } from "react-icons/fa";
 import { playLeadSound } from "@/lib/sound";
-import { formatNumber, formatCurrency, startOfConversionDay } from "@/lib/mock-data";
+import { formatNumber, formatCurrency } from "@/lib/mock-data";
+import { WIB, todayISO, startOfConversionDay } from "@/lib/conversion-day";
 
-const todayISO = () => new Date().toISOString().slice(0, 10);
+const dateISO = (d) => {
+  const wib = new Date(d.getTime() + WIB);
+  return `${wib.getUTCFullYear()}-${String(wib.getUTCMonth() + 1).padStart(2, "0")}-${String(wib.getUTCDate()).padStart(2, "0")}`;
+};
 
 const formatDate = (dateStr) =>
   new Date(dateStr + "T00:00:00").toLocaleDateString("id-ID", {
@@ -83,7 +87,6 @@ function ReportView() {
 
   const applyRange = (key) => {
     if (key === "custom") return;
-    const fmt = (d) => d.toISOString().slice(0, 10);
     const now = new Date();
     const a = new Date(now);
     if (key === "today") {
@@ -91,15 +94,15 @@ function ReportView() {
       setTo(todayISO());
     } else if (key === "yesterday") {
       a.setDate(a.getDate() - 1);
-      setFrom(fmt(a));
-      setTo(fmt(a));
+      setFrom(dateISO(a));
+      setTo(dateISO(a));
     } else if (key === "week") {
       a.setDate(a.getDate() - 6);
-      setFrom(fmt(a));
+      setFrom(dateISO(a));
       setTo(todayISO());
     } else if (key === "month") {
       a.setDate(a.getDate() - 29);
-      setFrom(fmt(a));
+      setFrom(dateISO(a));
       setTo(todayISO());
     }
     setRange(key);
@@ -243,36 +246,79 @@ function RealtimeView() {
   });
   const [liveTraffic, setLiveTraffic] = useState([]);
   const [liveConvs, setLiveConvs] = useState([]);
-  const [liveCount, setLiveCount] = useState(0);
-  const [liveEarning, setLiveEarning] = useState(0);
   const [lastEvent, setLastEvent] = useState(null);
+  const [flashId, setFlashId] = useState(null);
+  const [ready, setReady] = useState(false);
   const feedRef = useRef(null);
+  const seenIds = useRef(new Set());
+  const newestRef = useRef(null);
 
   useEffect(() => {
     let cancelled = false;
+    setReady(false);
     const params = new URLSearchParams({ range });
     if (filterSubId !== "all") params.set("sub_id", filterSubId);
     fetch(`/api/monitor/stats?${params}`)
       .then((r) => r.json())
       .then((d) => {
         if (cancelled) return;
+        const feed = d.feed || [];
+        const conversions = d.conversions || [];
+        const baseIds = new Set([...feed, ...conversions].map((x) => x.id));
+        seenIds.current = new Set([...seenIds.current, ...baseIds]);
+        newestRef.current = null;
         setBase({
-          feed: d.feed || [],
-          conversions: d.conversions || [],
+          feed,
+          conversions,
           totals: d.totals || { clicks: 0, conversions: 0, earning: 0 },
           subIds: d.subIds || [],
           redirectById: d.redirectById || {},
         });
-        setLiveTraffic([]);
-        setLiveConvs([]);
-        setLiveCount(0);
-        setLiveEarning(0);
+        setLiveTraffic((prev) => prev.filter((t) => !baseIds.has(t.id)));
+        setLiveConvs((prev) => prev.filter((c) => !baseIds.has(c.id)));
+        setFlashId(null);
+        setReady(true);
       })
       .catch(() => {});
     return () => {
       cancelled = true;
     };
   }, [range, filterSubId]);
+
+  const handleLive = useCallback(
+    (ev, type) => {
+      if (!ev || !ev.id) return;
+      if (!ready) return;
+      if (seenIds.current.has(ev.id)) return;
+      seenIds.current.add(ev.id);
+      const ts = new Date(ev.created_at).getTime();
+      if (!isNaN(ts) && (!newestRef.current || ts > newestRef.current)) {
+        newestRef.current = ts;
+      }
+      if (type === "traffic") {
+        setLiveTraffic((prev) => [ev, ...prev].slice(0, 120));
+        setLastEvent({ ...ev, type: "traffic" });
+        setFlashId(ev.id);
+      } else {
+        setLiveConvs((prev) => [ev, ...prev].slice(0, 120));
+        setLastEvent({ ...ev, type: "conversion" });
+        setFlashId(ev.id);
+        refreshOverview();
+        if (soundOn) playLeadSound();
+        pushToast({
+          title: "Lead Baru!",
+          body: (
+            <>
+              {ev.sub_id} — {formatCurrency(ev.earning, currency)} dari{" "}
+              <CountryFlag country={ev.country} size={14} />
+            </>
+          ),
+          tone: "emerald",
+        });
+      }
+    },
+    [ready, soundOn, currency, refreshOverview]
+  );
 
   useEffect(() => {
     if (typeof EventSource === "undefined") return;
@@ -285,31 +331,12 @@ function RealtimeView() {
 
     const onTraffic = (e) => {
       try {
-        const t = JSON.parse(e.data);
-        setLiveTraffic((prev) => [t, ...prev].slice(0, 120));
-        setLiveCount((c) => c + 1);
-        setLastEvent({ ...t, type: "traffic" });
+        handleLive(JSON.parse(e.data), "traffic");
       } catch {}
     };
     const onConversion = (e) => {
       try {
-        const c = JSON.parse(e.data);
-        setLiveConvs((prev) => [c, ...prev].slice(0, 120));
-        setLiveCount((c2) => c2 + 1);
-        setLiveEarning((x) => x + (Number(c.earning) || 0));
-        setLastEvent({ ...c, type: "conversion" });
-        refreshOverview();
-        if (soundOn) playLeadSound();
-        pushToast({
-          title: "Lead Baru!",
-          body: (
-            <>
-              {c.sub_id} — {formatCurrency(c.earning, currency)} dari{" "}
-              <CountryFlag country={c.country} size={14} />
-            </>
-          ),
-          tone: "emerald",
-        });
+        handleLive(JSON.parse(e.data), "conversion");
       } catch {}
     };
 
@@ -318,7 +345,32 @@ function RealtimeView() {
     return () => {
       es.close();
     };
-  }, [soundOn, currency, refreshOverview]);
+  }, [handleLive]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!ready) return;
+    let stopped = false;
+    const poll = async () => {
+      if (stopped || document.hidden) return;
+      try {
+        const params = new URLSearchParams({ range });
+        if (filterSubId !== "all") params.set("sub_id", filterSubId);
+        if (newestRef.current) params.set("since", new Date(newestRef.current).toISOString());
+        const res = await fetch(`/api/monitor/live?${params}`);
+        if (!res.ok) return;
+        const d = await res.json();
+        (d.traffic || []).forEach((t) => handleLive(t, "traffic"));
+        (d.conversions || []).forEach((c) => handleLive(c, "conversion"));
+      } catch {}
+    };
+    poll();
+    const id = setInterval(poll, 4000);
+    return () => {
+      stopped = true;
+      clearInterval(id);
+    };
+  }, [handleLive, ready, range, filterSubId]);
 
   useEffect(() => {
     if (feedRef.current && lastEvent) {
@@ -353,6 +405,8 @@ function RealtimeView() {
       .slice(0, 200);
   }, [allConvs, range, filterSubId]);
 
+  const liveCount = liveTraffic.length + liveConvs.length;
+  const liveEarning = liveConvs.reduce((s, c) => s + (Number(c.earning) || 0), 0);
   const totalClicks = base.totals.clicks + liveCount;
   const totalConversions = base.totals.conversions + liveConvs.length;
   const totalEarning = base.totals.earning + liveEarning;
@@ -456,7 +510,7 @@ function RealtimeView() {
               </thead>
               <tbody>
                 {feed.map((e, i) => (
-                  <tr key={e.id} className="border-b border-line/50 last:border-0 hover:bg-surface-2/50">
+                  <tr key={e.id} className={`border-b border-line/50 last:border-0 hover:bg-surface-2/50${e.id === flashId ? " animate-row-flash" : ""}`}>
                     <td className="px-5 py-3 text-muted tabular-nums text-xs">{i + 1}</td>
                     <td className="px-5 py-3">
                       <span
@@ -468,9 +522,19 @@ function RealtimeView() {
                     </td>
                     <td className="px-5 py-3 font-mono text-xs text-emerald">{e.sub_id}</td>
                     <td className="px-5 py-3"><CountryFlag country={e.country} size={18} /></td>
-                    <td className="px-5 py-3"><DeviceLogo device={e.os_device} size={18} /></td>
-                    <td className="px-5 py-3"><AppLogo app={e.app} size={18} /></td>
-                    <td className="px-5 py-3 font-mono text-xs text-muted">{e.ip_address}</td>
+                    <td className="px-5 py-3">
+                      <span className="flex items-center gap-1.5">
+                        <DeviceLogo device={e.os_device} size={16} />
+                        <span className="text-xs text-muted">{e.os_device || "-"}</span>
+                      </span>
+                    </td>
+                    <td className="px-5 py-3">
+                      <span className="flex items-center gap-1.5">
+                        <BrowserLogo browser={e.browser_app} size={16} />
+                        <span className="text-xs text-muted">{e.browser_app || "-"}</span>
+                      </span>
+                    </td>
+                    <td className="px-5 py-3 font-mono text-xs text-muted">{e.ip_address || "-"}</td>
                   </tr>
                 ))}
                 {feed.length === 0 && (
@@ -496,7 +560,7 @@ function RealtimeView() {
               </thead>
               <tbody>
                 {filteredConvs.map((c, i) => (
-                  <tr key={c.id} className="border-b border-line/50 last:border-0 hover:bg-emerald/5">
+                  <tr key={c.id} className={`border-b border-line/50 last:border-0 hover:bg-emerald/5${c.id === flashId ? " animate-row-flash" : ""}`}>
                     <td className="px-5 py-3 text-muted tabular-nums text-xs">{i + 1}</td>
                     <td className="px-5 py-3">
                       <span className="flex items-center gap-1.5">
@@ -508,10 +572,20 @@ function RealtimeView() {
                     </td>
                     <td className="px-5 py-3"><CountryFlag country={c.country} size={18} /></td>
                     <td className="px-5 py-3 text-muted text-xs">{c.network_name}</td>
-                    <td className="px-5 py-3"><DeviceLogo device={c.os_device} size={18} /></td>
-                    <td className="px-5 py-3"><AppLogo app={c.app} size={18} /></td>
+                    <td className="px-5 py-3">
+                      <span className="flex items-center gap-1.5">
+                        <DeviceLogo device={c.os_device} size={16} />
+                        <span className="text-xs text-muted">{c.os_device || "-"}</span>
+                      </span>
+                    </td>
+                    <td className="px-5 py-3">
+                      <span className="flex items-center gap-1.5">
+                        <BrowserLogo browser={c.browser_app} size={16} />
+                        <span className="text-xs text-muted">{c.browser_app || "-"}</span>
+                      </span>
+                    </td>
                     <td className="px-5 py-3 text-right font-semibold text-emerald">{formatCurrency(c.earning, currency)}</td>
-                    <td className="px-5 py-3 font-mono text-xs text-muted">{c.ip_address}</td>
+                    <td className="px-5 py-3 font-mono text-xs text-muted">{c.ip_address || "-"}</td>
                   </tr>
                 ))}
                 {filteredConvs.length === 0 && (

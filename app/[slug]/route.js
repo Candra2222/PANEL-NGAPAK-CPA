@@ -30,7 +30,11 @@ function detectOS(ua) {
 function clientInfo(request) {
   const ua = request.headers.get("user-agent") || "";
   return {
-    ip: request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || null,
+    ip:
+      request.headers.get("cf-connecting-ip")?.trim() ||
+      request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+      request.headers.get("x-real-ip") ||
+      null,
     country:
       request.headers.get("x-vercel-ip-country") ||
       request.headers.get("cf-ipcountry") ||

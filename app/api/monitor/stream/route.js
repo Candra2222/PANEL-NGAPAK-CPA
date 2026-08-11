@@ -31,18 +31,12 @@ export async function GET(request) {
         .channel("monitor-live")
         .on("postgres_changes", { event: "INSERT", schema: "public", table: "traffic_logs" }, (payload) => {
           if (!closed) {
-            const row = payload.new;
-            controller.enqueue(
-              sse("traffic", { ...row, app: null })
-            );
+            controller.enqueue(sse("traffic", payload.new));
           }
         })
         .on("postgres_changes", { event: "INSERT", schema: "public", table: "conversions" }, (payload) => {
           if (!closed) {
-            const row = payload.new;
-            controller.enqueue(
-              sse("conversion", { ...row, app: null })
-            );
+            controller.enqueue(sse("conversion", payload.new));
           }
         })
         .subscribe((status) => {

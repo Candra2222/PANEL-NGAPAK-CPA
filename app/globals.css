@@ -72,3 +72,15 @@ body {
 .animate-pulse-dot {
   animation: pulse-dot 1.2s ease-in-out infinite;
 }
+
+@keyframes row-flash {
+  0% {
+    background-color: rgba(16, 185, 129, 0.22);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+.animate-row-flash {
+  animation: row-flash 1.8s ease-out;
+}

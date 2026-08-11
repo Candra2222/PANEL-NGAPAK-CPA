@@ -20,26 +20,17 @@ import {
   FaTiktok,
 } from "react-icons/fa6";
 import { SiThreads, SiMessenger } from "react-icons/si";
-import {
-  ID,
-  MY,
-  SG,
-  TH,
-  PH,
-  VN,
-  US,
-  GB,
-  SA,
-  AU,
-} from "country-flag-icons/react/3x2";
-
-const FLAG_ICONS = { ID, MY, SG, TH, PH, VN, US, GB, SA, AU };
+import { hasFlag } from "country-flag-icons";
+import * as Flags from "country-flag-icons/react/3x2";
 
 const DEVICE_ICONS = {
   Android: { Icon: FaAndroid, color: "#3ddc84" },
   iPhone: { Icon: FaApple, color: "#ffffff" },
   iPad: { Icon: FaApple, color: "#ffffff" },
+  iOS: { Icon: FaApple, color: "#ffffff" },
   macOS: { Icon: FaApple, color: "#ffffff" },
+  Windows: { Icon: FaWindows, color: "#00adef" },
+  Linux: { Icon: FaLinux, color: "#fcc624" },
   "Desktop Windows": { Icon: FaWindows, color: "#00adef" },
   "Desktop Linux": { Icon: FaLinux, color: "#fcc624" },
 };
@@ -92,7 +83,7 @@ export function flagEmoji(country) {
 
 export function CountryFlag({ country, size = 18 }) {
   const code = (country || "").toUpperCase();
-  const Flag = FLAG_ICONS[code];
+  const Flag = hasFlag(code) ? Flags[code] : null;
   if (!Flag) return null;
   return <Flag width={size} height={Math.round(size * 0.75)} title={country} aria-label={country} />;
 }

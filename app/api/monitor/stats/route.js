@@ -1,36 +1,8 @@
 import { error, json, requireSession } from "@/lib/api";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { startOfConversionDay, rangeBounds } from "@/lib/conversion-day";
 
 export const dynamic = "force-dynamic";
-
-const WIB = 7 * 3600 * 1000;
-
-function startOfConversionDay() {
-  const wib = new Date(Date.now() + WIB);
-  return new Date(Date.UTC(wib.getUTCFullYear(), wib.getUTCMonth(), wib.getUTCDate()) - WIB).getTime();
-}
-
-function rangeBounds(range, from, to) {
-  const now = Date.now();
-  const todayStart = startOfConversionDay();
-  switch (range) {
-    case "yesterday":
-      return { fromISO: new Date(todayStart - 24 * 3600 * 1000).toISOString(), toISO: new Date(todayStart).toISOString() };
-    case "week":
-      return { fromISO: new Date(now - 7 * 86400 * 1000).toISOString(), toISO: new Date().toISOString() };
-    case "month":
-      return { fromISO: new Date(now - 30 * 86400 * 1000).toISOString(), toISO: new Date().toISOString() };
-    case "custom": {
-      if (!from || !to) return { fromISO: new Date(todayStart).toISOString(), toISO: new Date().toISOString() };
-      const fromDate = new Date(from + "T00:00:00Z").getTime() - WIB;
-      const toDate = new Date(to + "T23:59:59.999Z").getTime() - WIB;
-      return { fromISO: new Date(fromDate).toISOString(), toISO: new Date(toDate).toISOString() };
-    }
-    case "today":
-    default:
-      return { fromISO: new Date(todayStart).toISOString(), toISO: new Date().toISOString() };
-  }
-}
 
 async function fetchRangeRows(supabase, table, columns, fromISO, toISO) {
   const page = 1000;
@@ -192,8 +164,8 @@ export async function GET(request) {
     fromISO,
     toISO,
     totals,
-    feed: filteredFeed.map((t) => ({ ...t, app: null })),
-    conversions: filteredConvs.map((c) => ({ ...c, app: null })),
+    feed: filteredFeed,
+    conversions: filteredConvs,
     report,
     topToday,
     topCountries,
