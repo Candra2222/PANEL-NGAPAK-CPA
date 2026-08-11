@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Shell from "@/components/Shell";
 import ToastStack from "@/components/ToastStack";
-import { isAuthed } from "@/lib/auth";
+import { checkSession } from "@/lib/auth";
 
 const nav = [
   { href: "/admin/dashboard", icon: "dashboard", label: "Dashboard" },
@@ -18,7 +18,14 @@ export default function AdminLayout({ children }) {
   const router = useRouter();
 
   useEffect(() => {
-    if (!isAuthed("admin")) router.replace("/admin/login");
+    let active = true;
+    checkSession("admin").then((session) => {
+      if (!active) return;
+      if (!session) router.replace("/admin/login");
+    });
+    return () => {
+      active = false;
+    };
   }, [router]);
 
   return (

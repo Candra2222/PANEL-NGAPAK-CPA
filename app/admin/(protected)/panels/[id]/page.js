@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import PageHeader from "@/components/PageHeader";
 import Badge from "@/components/Badge";
@@ -8,19 +8,82 @@ import StatCard from "@/components/StatCard";
 import CopyButton from "@/components/CopyButton";
 import { Icon } from "@/components/icons";
 import { pushToast } from "@/components/ToastStack";
-import { panelById, mockRedirects, mockConversions, mockTraffic, formatNumber, formatCurrency, fullLink, timeAgo } from "@/lib/mock-data";
-import { decryptPassword } from "@/lib/encrypt";
+import { formatNumber, formatCurrency, fullLink, timeAgo } from "@/lib/mock-data";
 
 export default function PanelDetail() {
   const params = useParams();
   const router = useRouter();
-  const panel = panelById(params.id);
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
   const [resetData, setResetData] = useState(null);
-  const [showPass, setShowPass] = useState(false);
   const [resetForm, setResetForm] = useState(false);
   const [resetPw, setResetPw] = useState("");
+  const [busy, setBusy] = useState(false);
 
-  if (!panel) {
+  const load = () => {
+    return fetch(`/api/admin/panels/${params.id}`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("not-found"))))
+      .then(setData)
+      .catch(() => setNotFound(true))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params.id]);
+
+  const api = async (url, options = {}) => {
+    const res = await fetch(url, options);
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body.error || "Terjadi kesalahan.");
+    return body;
+  };
+
+  const toggleActive = async () => {
+    try {
+      const d = await api(`/api/admin/panels/${params.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "toggle-active", is_active: !data.panel.is_active }),
+      });
+      setData((prev) => ({ ...prev, panel: { ...prev.panel, is_active: d.is_active } }));
+      pushToast({ title: d.is_active ? "Diaktifkan" : "Dinonaktifkan", body: data.panel.sub_id, tone: d.is_active ? "emerald" : "amber" });
+    } catch (err) {
+      pushToast({ title: "Gagal", body: err.message, tone: "red" });
+    }
+  };
+
+  const submitReset = async (e) => {
+    e.preventDefault();
+    if (resetPw.trim().length < 3) {
+      pushToast({ title: "Password terlalu pendek", body: "Minimal 3 karakter.", tone: "red" });
+      return;
+    }
+    setBusy(true);
+    try {
+      const d = await api(`/api/admin/panels/${params.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "reset-password", password: resetPw.trim() }),
+      });
+      setResetData(d.password);
+      setResetForm(false);
+      setResetPw("");
+      pushToast({ title: "Password direset", body: "Password baru ditampilkan di modal." });
+    } catch (err) {
+      pushToast({ title: "Gagal", body: err.message, tone: "red" });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (loading) {
+    return <div className="flex items-center justify-center py-32 text-muted">Memuat...</div>;
+  }
+
+  if (notFound || !data?.panel) {
     return (
       <div className="text-center py-24">
         <p className="text-muted">Member tidak ditemukan.</p>
@@ -31,11 +94,9 @@ export default function PanelDetail() {
     );
   }
 
-  const links = mockRedirects.filter((r) => r.panel_id === panel.id);
-  const clicks = links.reduce((s, r) => s + r.clicks, 0);
-  const convs = mockConversions.filter((c) => c.panel_id === panel.id);
-  const earning = convs.reduce((s, c) => s + c.earning, 0);
-  const traffic = mockTraffic.filter((t) => t.panel_id === panel.id).slice(0, 6);
+  const { panel, redirects, conversions, traffic } = data;
+  const clicks = redirects.reduce((s, r) => s + r.clicks, 0);
+  const earning = conversions.reduce((s, c) => s + Number(c.earning || 0), 0);
 
   return (
     <div>
@@ -46,11 +107,11 @@ export default function PanelDetail() {
           <>
             <Badge tone={panel.is_active ? "green" : "red"} dot>{panel.is_active ? "Aktif" : "Nonaktif"}</Badge>
             <button
-              onClick={() => setShowPass(true)}
+              onClick={toggleActive}
               className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-line text-sm font-semibold text-muted hover:text-emerald hover:border-emerald/40 transition-colors"
             >
-              <Icon name="eye" className="w-4 h-4" />
-              Lihat Password
+              <Icon name="shield" className="w-4 h-4" />
+              {panel.is_active ? "Nonaktifkan" : "Aktifkan"}
             </button>
             <button
               onClick={() => {
@@ -67,9 +128,9 @@ export default function PanelDetail() {
       />
 
       <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
-        <StatCard icon="link" label="Jumlah Link" value={formatNumber(links.length)} tone="sky" />
+        <StatCard icon="link" label="Jumlah Link" value={formatNumber(redirects.length)} tone="sky" />
         <StatCard icon="chart" label="Total Click" value={formatNumber(clicks)} tone="violet" />
-        <StatCard icon="bolt" label="Conversion" value={formatNumber(convs.length)} tone="emerald" />
+        <StatCard icon="bolt" label="Conversion" value={formatNumber(conversions.length)} tone="emerald" />
         <StatCard icon="wallet" label="Earning" value={formatCurrency(earning, "USD")} sub={`≈ ${formatCurrency(earning, "IDR")}`} tone="amber" />
       </div>
 
@@ -95,7 +156,7 @@ export default function PanelDetail() {
             </div>
             <div className="flex justify-between gap-3">
               <dt className="text-muted">CTR</dt>
-              <dd>{clicks > 0 ? ((convs.length / clicks) * 100).toFixed(2) : "0.00"}%</dd>
+              <dd>{clicks > 0 ? ((conversions.length / clicks) * 100).toFixed(2) : "0.00"}%</dd>
             </div>
           </dl>
         </div>
@@ -103,7 +164,7 @@ export default function PanelDetail() {
         <div className="lg:col-span-2 bg-surface border border-line rounded-xl overflow-hidden">
           <div className="px-5 py-4 border-b border-line flex items-center justify-between">
             <h2 className="font-bold">Daftar Link</h2>
-            <span className="text-xs text-muted">{links.length} link</span>
+            <span className="text-xs text-muted">{redirects.length} link</span>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -117,7 +178,7 @@ export default function PanelDetail() {
                 </tr>
               </thead>
               <tbody>
-                {links.map((r) => (
+                {redirects.map((r) => (
                   <tr key={r.id} className="border-b border-line/50 last:border-0 hover:bg-surface-2/50">
                     <td className="px-5 py-3 font-semibold">{r.link_name}</td>
                     <td className="px-5 py-3 font-mono text-xs text-muted">{r.slug}</td>
@@ -128,7 +189,7 @@ export default function PanelDetail() {
                     </td>
                   </tr>
                 ))}
-                {links.length === 0 && (
+                {redirects.length === 0 && (
                   <tr>
                     <td colSpan={5} className="px-5 py-10 text-center text-muted">Belum ada link.</td>
                   </tr>
@@ -146,10 +207,10 @@ export default function PanelDetail() {
             {traffic.map((t) => (
               <div key={t.id} className="bg-navy border border-line rounded-lg px-4 py-3 flex items-center gap-3">
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm font-semibold truncate">{t.country} · {t.browser_app}</div>
-                  <div className="text-xs text-muted truncate">{t.os_device} — {timeAgo(t.created_at)}</div>
+                  <div className="text-sm font-semibold truncate">{t.country || "—"} · {t.browser_app || "—"}</div>
+                  <div className="text-xs text-muted truncate">{t.os_device || "—"} — {timeAgo(t.created_at)}</div>
                 </div>
-                <CopyButton text={t.ip_address} label="IP" />
+                <CopyButton text={t.ip_address || ""} label="IP" />
               </div>
             ))}
           </div>
@@ -157,94 +218,72 @@ export default function PanelDetail() {
       )}
 
       {resetForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/70" onClick={() => setResetForm(false)} />
-          <div className="relative w-full max-w-sm bg-surface border border-line rounded-2xl p-6 animate-toast-in">
-            <h3 className="font-bold text-lg mb-1">Reset Password</h3>
-            <p className="text-xs text-muted mb-4">
-              Tulis password baru untuk <span className="font-mono text-emerald font-semibold">{panel.sub_id}</span> — ditulis manual oleh admin, tanpa kode acak.
-            </p>
-            <form onSubmit={(e) => {
-              e.preventDefault();
-              if (resetPw.trim().length < 3) {
-                pushToast({ title: "Password terlalu pendek", body: "Minimal 3 karakter.", tone: "red" });
-                return;
-              }
-              setResetData({ password: resetPw.trim() });
-              setResetForm(false);
-              setResetPw("");
-              pushToast({ title: "Password direset", body: "Password baru ditampilkan di modal." });
-            }} className="space-y-4">
-              <input
-                value={resetPw}
-                onChange={(e) => setResetPw(e.target.value)}
-                placeholder="Tulis password baru..."
-                className="w-full bg-navy border border-line rounded-lg px-3.5 py-2.5 text-sm focus:outline-none focus:border-emerald/60 focus:ring-2 focus:ring-emerald/20"
-                autoFocus
-              />
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setResetForm(false)}
-                  className="flex-1 py-2.5 rounded-lg border border-line text-sm font-semibold text-muted hover:text-foreground transition-colors"
-                >
-                  Batal
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 py-2.5 rounded-lg bg-emerald text-navy text-sm font-bold hover:bg-emerald-dim transition-colors"
-                >
-                  Simpan Password
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+        <Modal title="Reset Password" onClose={() => setResetForm(false)}>
+          <p className="text-xs text-muted mb-4">
+            Tulis password baru untuk <span className="font-mono text-emerald font-semibold">{panel.sub_id}</span> — ditulis manual oleh admin, tanpa kode acak.
+          </p>
+          <form onSubmit={submitReset} className="space-y-4">
+            <input
+              value={resetPw}
+              onChange={(e) => setResetPw(e.target.value)}
+              placeholder="Tulis password baru..."
+              className="w-full bg-navy border border-line rounded-lg px-3.5 py-2.5 text-sm focus:outline-none focus:border-emerald/60 focus:ring-2 focus:ring-emerald/20"
+              autoFocus
+            />
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setResetForm(false)}
+                className="flex-1 py-2.5 rounded-lg border border-line text-sm font-semibold text-muted hover:text-foreground transition-colors"
+              >
+                Batal
+              </button>
+              <button
+                type="submit"
+                disabled={busy}
+                className="flex-1 py-2.5 rounded-lg bg-emerald text-navy text-sm font-bold hover:bg-emerald-dim transition-colors disabled:opacity-60"
+              >
+                {busy ? "Menyimpan..." : "Simpan Password"}
+              </button>
+            </div>
+          </form>
+        </Modal>
       )}
 
       {resetData && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/70" onClick={() => setResetData(null)} />
-          <div className="relative w-full max-w-sm bg-surface border border-line rounded-2xl p-6 animate-toast-in">
-            <h3 className="font-bold text-lg mb-4">Password Baru</h3>
-            <div className="bg-navy border border-emerald/30 rounded-lg p-4 flex items-center justify-between gap-3">
-              <span className="font-mono text-lg text-emerald font-bold">{resetData.password}</span>
-              <CopyButton text={resetData.password} />
-            </div>
-            <p className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2 mt-4">
-              Password disimpan terenkripsi (bukan di-hash), jadi admin tetap bisa melihatnya lagi lewat tombol &quot;Lihat Password&quot;.
-            </p>
-            <button
-              onClick={() => setResetData(null)}
-              className="mt-5 w-full py-2.5 rounded-lg bg-emerald text-navy text-sm font-bold hover:bg-emerald-dim transition-colors"
-            >
-              Tutup
-            </button>
+        <Modal title="Password Baru" onClose={() => setResetData(null)}>
+          <div className="bg-navy border border-emerald/30 rounded-lg p-4 flex items-center justify-between gap-3">
+            <span className="font-mono text-lg text-emerald font-bold">{resetData}</span>
+            <CopyButton text={resetData} />
           </div>
-        </div>
+          <p className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2 mt-4">
+            Password disimpan sebagai bcrypt hash & tidak bisa dilihat lagi. Bagikan ke member terkait.
+          </p>
+          <button
+            onClick={() => setResetData(null)}
+            className="mt-5 w-full py-2.5 rounded-lg bg-emerald text-navy text-sm font-bold hover:bg-emerald-dim transition-colors"
+          >
+            Tutup
+          </button>
+        </Modal>
       )}
+    </div>
+  );
+}
 
-      {showPass && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/70" onClick={() => setShowPass(false)} />
-          <div className="relative w-full max-w-sm bg-surface border border-line rounded-2xl p-6 animate-toast-in">
-            <h3 className="font-bold text-lg mb-4">Password Panel 2</h3>
-            <div className="bg-navy border border-emerald/30 rounded-lg p-4 flex items-center justify-between gap-3">
-              <span className="font-mono text-lg text-emerald font-bold break-all">{decryptPassword(panel.password_enc)}</span>
-              <CopyButton text={decryptPassword(panel.password_enc)} />
-            </div>
-            <p className="text-xs text-muted mt-4">
-              Ditampilkan dari nilai terenkripsi (<span className="font-mono">{panel.password_enc}</span>) yang tersimpan — password di-dekripsi saat ditampilkan.
-            </p>
-            <button
-              onClick={() => setShowPass(false)}
-              className="mt-5 w-full py-2.5 rounded-lg bg-emerald text-navy text-sm font-bold hover:bg-emerald-dim transition-colors"
-            >
-              Tutup
-            </button>
-          </div>
+function Modal({ title, onClose, children }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/70" onClick={onClose} />
+      <div className="relative w-full max-w-sm bg-surface border border-line rounded-2xl p-6 animate-toast-in">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-bold text-lg">{title}</h3>
+          <button onClick={onClose} className="text-muted hover:text-foreground" aria-label="Tutup">
+            <Icon name="x" className="w-5 h-5" />
+          </button>
         </div>
-      )}
+        {children}
+      </div>
     </div>
   );
 }

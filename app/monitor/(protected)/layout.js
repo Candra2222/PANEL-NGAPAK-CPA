@@ -1,24 +1,19 @@
 "use client";
 
-import { useContext, useEffect, useMemo, useState } from "react";
+import { useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Shell from "@/components/Shell";
 import ToastStack from "@/components/ToastStack";
 import { MonitorCtx } from "./monitor-context";
 import { CountryFlag } from "@/components/BrandLogo";
 import { isAuthed } from "@/lib/auth";
-import {
-  mockConversions,
-  topPerformanceToday,
-  topCountries,
-  formatCurrency,
-  formatNumber,
-} from "@/lib/mock-data";
+import { formatCurrency, formatNumber } from "@/lib/mock-data";
 
 const nav = [];
 
 function PerformanceCard({ currency }) {
-  const top = useMemo(() => topPerformanceToday(), []);
+  const { overview } = useContext(MonitorCtx);
+  const top = overview?.topToday || [];
 
   if (top.length === 0) {
     return (
@@ -55,8 +50,18 @@ function PerformanceCard({ currency }) {
 }
 
 function CountryCard() {
-  const countries = useMemo(() => topCountries(), []);
+  const { overview } = useContext(MonitorCtx);
+  const countries = overview?.topCountries || [];
   const maxCountry = Math.max(...countries.map((c) => c.count), 1);
+
+  if (countries.length === 0) {
+    return (
+      <div className="bg-surface-2 border border-line rounded-lg p-3">
+        <div className="text-[11px] font-bold uppercase tracking-wide text-muted mb-2">Top Country</div>
+        <p className="text-xs text-muted">Belum ada data.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-surface-2 border border-line rounded-lg p-3">
@@ -110,13 +115,40 @@ export default function MonitorLayout({ children }) {
   const router = useRouter();
   const [currency, setCurrency] = useState("USD");
   const [view, setView] = useState("realtime");
+  const [overview, setOverview] = useState(null);
+
+  const refreshOverview = useCallback(async () => {
+    try {
+      const res = await fetch("/api/monitor/stats?range=today");
+      if (!res.ok) return;
+      const data = await res.json();
+      setOverview(data);
+    } catch {}
+  }, []);
 
   useEffect(() => {
-    if (!isAuthed("monitor")) router.replace("/monitor/login");
+    if (!isAuthed("monitor")) {
+      router.replace("/monitor/login");
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/monitor/stats?range=today");
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled) setOverview(data);
+      } catch {}
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [router]);
 
+  const totalEarning = overview?.totals?.earning || 0;
+
   return (
-    <MonitorCtx.Provider value={{ currency, setCurrency, view, setView }}>
+    <MonitorCtx.Provider value={{ currency, setCurrency, view, setView, overview, refreshOverview }}>
       <Shell
         brand="CPA Link Panel"
         sub="Realtime Monitor"
@@ -126,7 +158,7 @@ export default function MonitorLayout({ children }) {
         sidebar={<SidebarWidgets currency={currency} />}
         showClock
         headerTitle="Realtime Monitor"
-        headerStat={{ label: "Total Earning", value: formatCurrency(mockConversions.reduce((s, c) => s + c.earning, 0), currency) }}
+        headerStat={{ label: "Total Earning Hari Ini", value: formatCurrency(totalEarning, currency) }}
       >
         <ToastStack />
         {children}

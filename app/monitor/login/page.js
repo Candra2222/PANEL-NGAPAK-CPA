@@ -10,8 +10,13 @@ export default function MonitorLogin() {
   const router = useRouter();
 
   const onLogin = async (password) => {
-    await new Promise((r) => setTimeout(r, 700));
-    if (password.length < 3) throw new Error("Password minimal 3 karakter.");
+    const res = await fetch("/api/monitor/auth", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || "Gagal masuk.");
     setAuthed("monitor");
     pushToast({ title: "Berhasil masuk", body: "Memuat data realtime seluruh Sub ID..." });
     router.push("/monitor/dashboard");

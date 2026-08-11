@@ -7,4 +7,6 @@ export const MonitorCtx = createContext({
   setCurrency: () => {},
   view: "realtime",
   setView: () => {},
+  overview: null,
+  refreshOverview: () => {},
 });

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import PageHeader from "@/components/PageHeader";
 import Badge from "@/components/Badge";
@@ -8,18 +8,18 @@ import StatCard from "@/components/StatCard";
 import CopyButton from "@/components/CopyButton";
 import { Icon } from "@/components/icons";
 import { pushToast } from "@/components/ToastStack";
-import { mockPanels, mockRedirects, formatNumber, randomPassword, detectSubIdParams, isValidUrl } from "@/lib/mock-data";
-import { encryptPassword } from "@/lib/encrypt";
-
-let panelCounter = 1000;
+import { formatNumber } from "@/lib/mock-data";
+import { detectSubIdParams, isValidUrl } from "@/lib/links";
 
 export default function AdminPanels() {
-  const [panels, setPanels] = useState(mockPanels);
+  const [panels, setPanels] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [created, setCreated] = useState(null);
   const [query, setQuery] = useState("");
   const [resetFor, setResetFor] = useState(null);
   const [resetPw, setResetPw] = useState("");
+  const [busy, setBusy] = useState(false);
 
   const [form, setForm] = useState({
     smartlink_url: "",
@@ -33,6 +33,18 @@ export default function AdminPanels() {
   const activeParam = detectedParams.find((p) => p.key === form.param_key) || detectedParams[0] || null;
   const detectedSubId = activeParam ? activeParam.value : null;
 
+  useEffect(() => {
+    let active = true;
+    fetch("/api/admin/panels")
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("Gagal memuat data."))))
+      .then((d) => active && setPanels(d.panels || []))
+      .catch(() => active && pushToast({ title: "Gagal memuat data", tone: "red" }))
+      .finally(() => active && setLoading(false));
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const filtered = useMemo(() => {
     const q = query.toLowerCase();
     return panels.filter(
@@ -40,7 +52,14 @@ export default function AdminPanels() {
     );
   }, [panels, query]);
 
-  const create = (e) => {
+  const api = async (url, options = {}) => {
+    const res = await fetch(url, options);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || "Terjadi kesalahan.");
+    return data;
+  };
+
+  const create = async (e) => {
     e.preventDefault();
     if (!form.smartlink_url.trim() || !form.panel_name.trim()) {
       pushToast({ title: "Lengkapi form", body: "URL Smartlink dan nama member wajib diisi.", tone: "red" });
@@ -62,44 +81,60 @@ export default function AdminPanels() {
       pushToast({ title: "Sub ID sudah ada", body: `"${detectedSubId}" sudah terdaftar.`, tone: "red" });
       return;
     }
-    const password = form.auto ? randomPassword() : form.password;
-    if (!form.auto && password.length < 3) {
-      pushToast({ title: "Password terlalu pendek", body: "Minimal 3 karakter.", tone: "red" });
-      return;
+    setBusy(true);
+    try {
+      const data = await api("/api/admin/panels", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          smartlink_url: form.smartlink_url.trim(),
+          panel_name: form.panel_name.trim(),
+          password: form.auto ? "" : form.password,
+        }),
+      });
+      setPanels((prev) => [data.panel, ...prev]);
+      setCreated({ ...data.panel, password: data.password });
+      setShowModal(false);
+      setForm({ smartlink_url: "", param_key: "", panel_name: "", password: "", auto: true });
+      pushToast({ title: "Sub ID dibuat", body: `Password Panel 2 ditampilkan sekali di modal.` });
+    } catch (err) {
+      pushToast({ title: "Gagal membuat", body: err.message, tone: "red" });
+    } finally {
+      setBusy(false);
     }
-    const newPanel = {
-      id: "p" + ++panelCounter,
-      sub_id: detectedSubId,
-      panel_name: form.panel_name.trim(),
-      smartlink_url: form.smartlink_url.trim(),
-      is_active: true,
-      created_at: new Date().toISOString(),
-      last_login_at: null,
-      password_enc: encryptPassword(password),
-    };
-    setPanels((prev) => [newPanel, ...prev]);
-    setCreated({ ...newPanel, password });
-    setShowModal(false);
-    setForm({ smartlink_url: "", param_key: "", panel_name: "", password: "", auto: true });
-    pushToast({ title: "Sub ID dibuat", body: `Password Panel 2 ditampilkan sekali di modal.` });
   };
 
-  const toggleActive = (id) => {
-    setPanels((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, is_active: !p.is_active } : p))
-    );
+  const toggleActive = async (id) => {
     const p = panels.find((x) => x.id === id);
-    pushToast({
-      title: p.is_active ? "Sub ID dinonaktifkan" : "Sub ID diaktifkan",
-      body: p.sub_id,
-      tone: p.is_active ? "amber" : "emerald",
-    });
+    if (!p) return;
+    try {
+      const data = await api(`/api/admin/panels/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "toggle-active", is_active: !p.is_active }),
+      });
+      setPanels((prev) => prev.map((x) => (x.id === id ? { ...x, is_active: data.is_active } : x)));
+      pushToast({
+        title: data.is_active ? "Sub ID diaktifkan" : "Sub ID dinonaktifkan",
+        body: p.sub_id,
+        tone: data.is_active ? "emerald" : "amber",
+      });
+    } catch (err) {
+      pushToast({ title: "Gagal", body: err.message, tone: "red" });
+    }
   };
 
-  const remove = (id) => {
+  const remove = async (id) => {
     const p = panels.find((x) => x.id === id);
-    setPanels((prev) => prev.filter((x) => x.id !== id));
-    pushToast({ title: "Sub ID dihapus", body: p.sub_id, tone: "red" });
+    if (!p) return;
+    if (!window.confirm(`Hapus member "${p.sub_id}"? Semua link ikut terhapus.`)) return;
+    try {
+      await api(`/api/admin/panels/${id}`, { method: "DELETE" });
+      setPanels((prev) => prev.filter((x) => x.id !== id));
+      pushToast({ title: "Sub ID dihapus", body: p.sub_id, tone: "red" });
+    } catch (err) {
+      pushToast({ title: "Gagal", body: err.message, tone: "red" });
+    }
   };
 
   const resetPassword = (id) => {
@@ -107,27 +142,38 @@ export default function AdminPanels() {
     setResetPw("");
   };
 
-  const confirmReset = (e) => {
+  const confirmReset = async (e) => {
     e.preventDefault();
     if (resetPw.trim().length < 3) {
       pushToast({ title: "Password terlalu pendek", body: "Minimal 3 karakter.", tone: "red" });
       return;
     }
-    setPanels((prev) => prev.map((p) => (p.id === resetFor ? { ...p, password_enc: encryptPassword(resetPw.trim()) } : p)));
-    setCreated({ ...panels.find((x) => x.id === resetFor), password: resetPw.trim(), isReset: true });
-    setResetFor(null);
-    setResetPw("");
-    pushToast({ title: "Password direset", body: "Password baru ditampilkan di modal." });
+    setBusy(true);
+    try {
+      const data = await api(`/api/admin/panels/${resetFor}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "reset-password", password: resetPw.trim() }),
+      });
+      setCreated({ ...panels.find((x) => x.id === resetFor), sub_id: data.sub_id, password: data.password, isReset: true });
+      setResetFor(null);
+      setResetPw("");
+      pushToast({ title: "Password direset", body: "Password baru ditampilkan di modal." });
+    } catch (err) {
+      pushToast({ title: "Gagal", body: err.message, tone: "red" });
+    } finally {
+      setBusy(false);
+    }
   };
 
   const activeCount = panels.filter((p) => p.is_active).length;
-  const totalClicks = mockRedirects.reduce((s, r) => s + r.clicks, 0);
+  const totalClicks = panels.reduce((s, p) => s + p.clicks, 0);
 
   return (
     <div>
       <PageHeader
         title="Sub ID / Member"
-        desc="URL Smartlink diekstrak otomatis."
+        desc="URL Smartlink diekstrak otomatis. Password Panel 2 tersimpan sebagai bcrypt hash."
         actions={
           <button
             onClick={() => setShowModal(true)}
@@ -172,59 +218,60 @@ export default function AdminPanels() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((p) => {
-                const links = mockRedirects.filter((r) => r.panel_id === p.id);
-                const clicks = links.reduce((s, r) => s + r.clicks, 0);
-                return (
-                  <tr key={p.id} className="border-b border-line/50 last:border-0 hover:bg-surface-2/50">
-                    <td className="px-5 py-3">
-                      <Link href={`/admin/panels/${p.id}`} className="font-semibold hover:text-emerald">
-                        {p.panel_name}
-                      </Link>
-                      <div className="text-xs text-muted">{new Date(p.created_at).toLocaleDateString("id-ID")}</div>
-                    </td>
-                    <td className="px-5 py-3 font-mono text-xs text-emerald">{p.sub_id}</td>
-                    <td className="px-5 py-3">
-                      <Badge tone={p.is_active ? "green" : "red"} dot>{p.is_active ? "Aktif" : "Nonaktif"}</Badge>
-                    </td>
-                    <td className="px-5 py-3 text-right tabular-nums">{links.length}</td>
-                    <td className="px-5 py-3 text-right tabular-nums">{formatNumber(clicks)}</td>
-                    <td className="px-5 py-3 text-muted text-xs">
-                      {p.last_login_at ? new Date(p.last_login_at).toLocaleString("id-ID", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : "Belum login"}
-                    </td>
-                    <td className="px-5 py-3">
-                      <div className="flex items-center justify-end gap-1">
-                        <button
-                          onClick={() => resetPassword(p.id)}
-                          className="p-2 rounded-lg text-muted hover:text-emerald hover:bg-emerald/10 transition-colors"
-                          title="Reset password"
-                        >
-                          <Icon name="reset" className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => toggleActive(p.id)}
-                          className={`p-2 rounded-lg transition-colors ${p.is_active ? "text-muted hover:text-amber-400 hover:bg-amber-500/10" : "text-muted hover:text-emerald hover:bg-emerald/10"}`}
-                          title={p.is_active ? "Nonaktifkan" : "Aktifkan"}
-                        >
-                          <Icon name="shield" className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => remove(p.id)}
-                          className="p-2 rounded-lg text-muted hover:text-red-400 hover:bg-red-500/10 transition-colors"
-                          title="Hapus"
-                        >
-                          <Icon name="trash" className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-              {filtered.length === 0 && (
+              {filtered.map((p) => (
+                <tr key={p.id} className="border-b border-line/50 last:border-0 hover:bg-surface-2/50">
+                  <td className="px-5 py-3">
+                    <Link href={`/admin/panels/${p.id}`} className="font-semibold hover:text-emerald">
+                      {p.panel_name}
+                    </Link>
+                    <div className="text-xs text-muted">{new Date(p.created_at).toLocaleDateString("id-ID")}</div>
+                  </td>
+                  <td className="px-5 py-3 font-mono text-xs text-emerald">{p.sub_id}</td>
+                  <td className="px-5 py-3">
+                    <Badge tone={p.is_active ? "green" : "red"} dot>{p.is_active ? "Aktif" : "Nonaktif"}</Badge>
+                  </td>
+                  <td className="px-5 py-3 text-right tabular-nums">{p.links}</td>
+                  <td className="px-5 py-3 text-right tabular-nums">{formatNumber(p.clicks)}</td>
+                  <td className="px-5 py-3 text-muted text-xs">
+                    {p.last_login_at ? new Date(p.last_login_at).toLocaleString("id-ID", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : "Belum login"}
+                  </td>
+                  <td className="px-5 py-3">
+                    <div className="flex items-center justify-end gap-1">
+                      <button
+                        onClick={() => resetPassword(p.id)}
+                        className="p-2 rounded-lg text-muted hover:text-emerald hover:bg-emerald/10 transition-colors"
+                        title="Reset password"
+                      >
+                        <Icon name="reset" className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => toggleActive(p.id)}
+                        className={`p-2 rounded-lg transition-colors ${p.is_active ? "text-muted hover:text-amber-400 hover:bg-amber-500/10" : "text-muted hover:text-emerald hover:bg-emerald/10"}`}
+                        title={p.is_active ? "Nonaktifkan" : "Aktifkan"}
+                      >
+                        <Icon name="shield" className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => remove(p.id)}
+                        className="p-2 rounded-lg text-muted hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                        title="Hapus"
+                      >
+                        <Icon name="trash" className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {!loading && filtered.length === 0 && (
                 <tr>
                   <td colSpan={7} className="px-5 py-10 text-center text-muted">
                     Tidak ada data yang cocok.
                   </td>
+                </tr>
+              )}
+              {loading && (
+                <tr>
+                  <td colSpan={7} className="px-5 py-10 text-center text-muted">Memuat...</td>
                 </tr>
               )}
             </tbody>
@@ -321,9 +368,10 @@ export default function AdminPanels() {
               </button>
               <button
                 type="submit"
-                className="px-4 py-2 rounded-lg bg-emerald text-navy text-sm font-bold hover:bg-emerald-dim transition-colors"
+                disabled={busy}
+                className="px-4 py-2 rounded-lg bg-emerald text-navy text-sm font-bold hover:bg-emerald-dim transition-colors disabled:opacity-60"
               >
-                Buat Sub ID
+                {busy ? "Membuat..." : "Buat Sub ID"}
               </button>
             </div>
           </form>
@@ -357,9 +405,10 @@ export default function AdminPanels() {
               </button>
               <button
                 type="submit"
-                className="px-4 py-2 rounded-lg bg-emerald text-navy text-sm font-bold hover:bg-emerald-dim transition-colors"
+                disabled={busy}
+                className="px-4 py-2 rounded-lg bg-emerald text-navy text-sm font-bold hover:bg-emerald-dim transition-colors disabled:opacity-60"
               >
-                Simpan Password
+                {busy ? "Menyimpan..." : "Simpan Password"}
               </button>
             </div>
           </form>
@@ -381,13 +430,10 @@ export default function AdminPanels() {
               <InfoRow label="Password" value={created.password} mono highlight />
             </div>
             <p className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2">
-              Password disimpan terenkripsi (bukan di-hash). Admin tetap bisa melihatnya lagi dari halaman detail member — tombol reset tetap tersedia per member.
+              Password disimpan sebagai bcrypt hash & tidak bisa dilihat lagi. Pastikan sudah menyalinnya.
             </p>
             <button
-              onClick={() => {
-                setCreated(null);
-                pushToast({ title: "Disalin", body: "Gunakan tombol salin per baris.", tone: "sky" });
-              }}
+              onClick={() => setCreated(null)}
               className="w-full py-2.5 rounded-lg bg-emerald text-navy text-sm font-bold hover:bg-emerald-dim transition-colors"
             >
               Tutup

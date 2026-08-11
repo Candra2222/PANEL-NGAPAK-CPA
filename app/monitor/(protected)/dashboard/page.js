@@ -11,16 +11,7 @@ import { MonitorCtx } from "../monitor-context";
 import { DeviceLogo, AppLogo, CountryFlag } from "@/components/BrandLogo";
 import { FaCrown } from "react-icons/fa";
 import { playLeadSound } from "@/lib/sound";
-import {
-  mockTraffic,
-  mockConversions,
-  mockRedirects,
-  mockApps,
-  dailyReportRange,
-  startOfConversionDay,
-  formatNumber,
-  formatCurrency,
-} from "@/lib/mock-data";
+import { formatNumber, formatCurrency, startOfConversionDay } from "@/lib/mock-data";
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 
@@ -63,17 +54,6 @@ const rangeCutoff = (range) => {
   }
 };
 
-const COUNTRIES = ["ID", "MY", "SG", "TH", "PH", "VN", "US", "GB", "SA", "AU"];
-const BROWSERS = ["Chrome", "Safari", "Edge", "Firefox", "Opera", "Samsung Internet"];
-const DEVICES = ["Android", "iPhone", "Desktop Windows", "macOS", "iPad", "Desktop Linux"];
-
-function rand(arr) {
-  return arr[Math.floor(Math.random() * arr.length)];
-}
-function randIp() {
-  return `${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}`;
-}
-
 export default function MonitorDashboard() {
   const { view } = useContext(MonitorCtx);
   return view === "report" ? <ReportView /> : <RealtimeView />;
@@ -84,7 +64,22 @@ function ReportView() {
   const [from, setFrom] = useState(todayISO());
   const [to, setTo] = useState(todayISO());
   const [range, setRange] = useState("today");
-  const data = useMemo(() => dailyReportRange(from, to), [from, to]);
+  const [data, setData] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const params = new URLSearchParams({ range: "custom", from, to });
+    fetch(`/api/monitor/stats?${params}`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (cancelled) return;
+        setData(d.report || []);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [from, to]);
 
   const applyRange = (key) => {
     if (key === "custom") return;
@@ -171,6 +166,10 @@ function ReportView() {
           <p className="text-sm text-red-400 px-5 py-10 text-center">
             Tanggal &quot;Dari&quot; tidak boleh lebih besar dari tanggal &quot;Sampai&quot;.
           </p>
+        ) : data === null ? (
+          <p className="text-sm text-muted px-5 py-10 text-center">Memuat laporan...</p>
+        ) : data.length === 0 ? (
+          <p className="text-sm text-muted px-5 py-10 text-center">Belum ada data pada rentang tanggal ini.</p>
         ) : (
           <ReportTable data={data} currency={currency} />
         )}
@@ -229,131 +228,134 @@ function ReportTable({ data, currency }) {
 }
 
 function RealtimeView() {
-  const { currency, setCurrency } = useContext(MonitorCtx);
+  const { currency, setCurrency, refreshOverview } = useContext(MonitorCtx);
   const [range, setRange] = useState("today");
   const [filterSubId, setFilterSubId] = useState("all");
   const [soundOn, setSoundOn] = useState(true);
   const [tab, setTab] = useState("realtime");
 
-  const [traffic, setTraffic] = useState(mockTraffic);
-  const [conversions, setConversions] = useState(mockConversions);
+  const [base, setBase] = useState({
+    feed: [],
+    conversions: [],
+    totals: { clicks: 0, conversions: 0, earning: 0 },
+    subIds: [],
+    redirectById: {},
+  });
+  const [liveTraffic, setLiveTraffic] = useState([]);
+  const [liveConvs, setLiveConvs] = useState([]);
   const [liveCount, setLiveCount] = useState(0);
+  const [liveEarning, setLiveEarning] = useState(0);
   const [lastEvent, setLastEvent] = useState(null);
   const feedRef = useRef(null);
 
-  const subIds = useMemo(
-    () => [...new Set(mockRedirects.map((r) => r.sub_id))],
-    []
-  );
-
-  const redirectById = useMemo(() => {
-    const m = new Map();
-    mockRedirects.forEach((r) => m.set(r.id, r));
-    return m;
-  }, []);
+  useEffect(() => {
+    let cancelled = false;
+    const params = new URLSearchParams({ range });
+    if (filterSubId !== "all") params.set("sub_id", filterSubId);
+    fetch(`/api/monitor/stats?${params}`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (cancelled) return;
+        setBase({
+          feed: d.feed || [],
+          conversions: d.conversions || [],
+          totals: d.totals || { clicks: 0, conversions: 0, earning: 0 },
+          subIds: d.subIds || [],
+          redirectById: d.redirectById || {},
+        });
+        setLiveTraffic([]);
+        setLiveConvs([]);
+        setLiveCount(0);
+        setLiveEarning(0);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [range, filterSubId]);
 
   useEffect(() => {
-    const tick = () => {
-      const isConv = Math.random() < 0.28;
-      if (isConv) {
-        const r = rand(mockRedirects);
-        const amount = parseFloat((Math.random() * 6 + 0.5).toFixed(2));
-        const conv = {
-          id: "live" + Date.now() + Math.random().toString(36).slice(2, 6),
-          redirect_id: r.id,
-          panel_id: r.panel_id,
-          sub_id: r.sub_id,
-          network_name: "Trafee",
-          country: rand(COUNTRIES),
-          earning: amount,
-          ip_address: randIp(),
-          browser_app: rand(BROWSERS),
-          os_device: rand(DEVICES),
-          app: rand(mockApps),
-          created_at: new Date().toISOString(),
-        };
-        setConversions((prev) => [conv, ...prev]);
-        setLastEvent({ ...conv, type: "conversion" });
+    if (typeof EventSource === "undefined") return;
+    let es;
+    try {
+      es = new EventSource("/api/monitor/stream");
+    } catch {
+      return;
+    }
+
+    const onTraffic = (e) => {
+      try {
+        const t = JSON.parse(e.data);
+        setLiveTraffic((prev) => [t, ...prev].slice(0, 120));
         setLiveCount((c) => c + 1);
+        setLastEvent({ ...t, type: "traffic" });
+      } catch {}
+    };
+    const onConversion = (e) => {
+      try {
+        const c = JSON.parse(e.data);
+        setLiveConvs((prev) => [c, ...prev].slice(0, 120));
+        setLiveCount((c2) => c2 + 1);
+        setLiveEarning((x) => x + (Number(c.earning) || 0));
+        setLastEvent({ ...c, type: "conversion" });
+        refreshOverview();
         if (soundOn) playLeadSound();
         pushToast({
           title: "Lead Baru!",
           body: (
             <>
-              {conv.sub_id} — {formatCurrency(conv.earning, currency)} dari{" "}
-              <CountryFlag country={conv.country} size={14} />
+              {c.sub_id} — {formatCurrency(c.earning, currency)} dari{" "}
+              <CountryFlag country={c.country} size={14} />
             </>
           ),
           tone: "emerald",
         });
-      } else {
-        const r = rand(mockRedirects);
-        const t = {
-          id: "live" + Date.now() + Math.random().toString(36).slice(2, 6),
-          redirect_id: r.id,
-          panel_id: r.panel_id,
-          sub_id: r.sub_id,
-          ip_address: randIp(),
-          country: rand(COUNTRIES),
-          browser_app: rand(BROWSERS),
-          os_device: rand(DEVICES),
-          app: rand(mockApps),
-          created_at: new Date().toISOString(),
-        };
-        setTraffic((prev) => [t, ...prev]);
-        setLastEvent({ ...t, type: "traffic" });
-        setLiveCount((c) => c + 1);
-      }
+      } catch {}
     };
 
-    const id = setInterval(tick, 5000);
-    return () => clearInterval(id);
-  }, [soundOn, currency]);
+    es.addEventListener("traffic", onTraffic);
+    es.addEventListener("conversion", onConversion);
+    return () => {
+      es.close();
+    };
+  }, [soundOn, currency, refreshOverview]);
 
   useEffect(() => {
     if (feedRef.current && lastEvent) {
       feedRef.current.scrollTop = 0;
     }
-  }, [lastEvent, traffic.length]);
+  }, [lastEvent, liveTraffic.length]);
+
+  const allTraffic = useMemo(() => [...liveTraffic, ...base.feed], [liveTraffic, base.feed]);
+  const allConvs = useMemo(() => [...liveConvs, ...base.conversions], [liveConvs, base.conversions]);
 
   const filteredTraffic = useMemo(() => {
     const cutoff = rangeCutoff(range);
     const upper = range === "yesterday" ? startOfConversionDay() : Infinity;
-    return traffic
+    return allTraffic
       .filter((t) => (filterSubId === "all" ? true : t.sub_id === filterSubId))
       .filter((t) => {
         const ts = new Date(t.created_at).getTime();
         return ts >= cutoff && ts < upper;
       })
       .slice(0, 60);
-  }, [traffic, range, filterSubId]);
+  }, [allTraffic, range, filterSubId]);
 
   const filteredConvs = useMemo(() => {
     const cutoff = rangeCutoff(range);
     const upper = range === "yesterday" ? startOfConversionDay() : Infinity;
-    return conversions
+    return allConvs
       .filter((c) => (filterSubId === "all" ? true : c.sub_id === filterSubId))
       .filter((c) => {
         const ts = new Date(c.created_at).getTime();
         return ts >= cutoff && ts < upper;
       })
       .slice(0, 60);
-  }, [conversions, range, filterSubId]);
+  }, [allConvs, range, filterSubId]);
 
-  const totalClicks = useMemo(
-    () =>
-      (filterSubId === "all" ? mockRedirects : mockRedirects.filter((r) => r.sub_id === filterSubId)).reduce(
-        (s, r) => s + r.clicks,
-        0
-      ) + liveCount,
-    [filterSubId, liveCount]
-  );
-
-  const totalConversions = filteredConvs.length;
-  const totalEarning = useMemo(
-    () => filteredConvs.reduce((s, c) => s + c.earning, 0),
-    [filteredConvs]
-  );
+  const totalClicks = base.totals.clicks + liveCount;
+  const totalConversions = base.totals.conversions + liveConvs.length;
+  const totalEarning = base.totals.earning + liveEarning;
 
   const feed = useMemo(() => {
     return [...filteredTraffic]
@@ -372,6 +374,7 @@ function RealtimeView() {
   }, [filteredConvs]);
 
   const ctr = totalClicks > 0 ? ((totalConversions / totalClicks) * 100).toFixed(2) : "0.00";
+  const { subIds, redirectById } = base;
 
   return (
     <div>
@@ -458,9 +461,9 @@ function RealtimeView() {
                     <td className="px-5 py-3">
                       <span
                         className="font-mono text-[11px] text-sky truncate max-w-[220px] inline-block align-middle"
-                        title={redirectById.get(e.redirect_id)?.destination_url || ""}
+                        title={redirectById[e.redirect_id]?.destination_url || ""}
                       >
-                        {redirectById.get(e.redirect_id)?.destination_url ?? "-"}
+                        {redirectById[e.redirect_id]?.destination_url ?? "-"}
                       </span>
                     </td>
                     <td className="px-5 py-3 font-mono text-xs text-emerald">{e.sub_id}</td>

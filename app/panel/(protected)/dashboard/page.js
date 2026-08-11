@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import PageHeader from "@/components/PageHeader";
 import Badge from "@/components/Badge";
 import StatCard from "@/components/StatCard";
@@ -8,20 +8,21 @@ import CopyButton from "@/components/CopyButton";
 import { Icon } from "@/components/icons";
 import { pushToast } from "@/components/ToastStack";
 import { getAuthedData } from "@/lib/auth";
-import { mockPanels, mockDomains, mockRedirects, mockConversions, formatNumber, formatCurrency, fullLink, randomSlug } from "@/lib/mock-data";
+import { formatNumber, formatCurrency, fullLink } from "@/lib/mock-data";
 
 export default function PanelDashboard() {
-  const data = getAuthedData("panel") || { panelId: "p1", subId: "trafee_001", name: "Tim Alpha" };
-  const subId = data.subId;
-  const panelId = data.panelId;
-  const teamName = data.name;
-  const smartlink = (mockPanels.find((p) => p.id === panelId) || {}).smartlink_url || "";
+  const session = getAuthedData("panel") || { sub_id: "—", panel_name: "Member", smartlink_url: "", domains: [] };
+  const [links, setLinks] = useState([]);
+  const [stats, setStats] = useState({ links: 0, clicks: 0, conversions: 0, earning: 0 });
+  const [smartlink, setSmartlink] = useState(session.smartlink_url || "");
+  const [panelName, setPanelName] = useState(session.panel_name);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
 
-  const activeDomains = mockDomains.filter((d) => d.is_active);
-  const defaultDomain = activeDomains[0]?.name || mockDomains[0].name;
+  const domains = session.domains?.length ? session.domains : ["go.panel-cpa.id"];
+  const defaultDomain = domains[0];
 
   const [tab, setTab] = useState("single");
-  const [links, setLinks] = useState(mockRedirects.filter((r) => r.panel_id === panelId));
   const [preview, setPreview] = useState(null);
 
   const [single, setSingle] = useState({
@@ -40,69 +41,93 @@ export default function PanelDashboard() {
     redirect_mode: "direct",
   });
 
-  const stats = useMemo(() => {
-    const clicks = links.reduce((s, r) => s + r.clicks, 0);
-    const convs = mockConversions.filter((c) => c.panel_id === panelId);
-    const earning = convs.reduce((s, c) => s + c.earning, 0);
-    return { links: links.length, clicks, conversions: convs.length, earning };
-  }, [links, panelId]);
-
-  const createSingle = (e) => {
-    e.preventDefault();
-    const slug = single.use_random_slug ? randomSlug(6) : (single.slug || randomSlug(6)).toLowerCase().replace(/\s+/g, "-");
-    if (!single.use_random_slug && links.some((l) => l.slug === slug)) {
-      pushToast({ title: "Slug sudah dipakai", body: "Ganti slug lain.", tone: "red" });
-      return;
-    }
-    const link = {
-      id: "r" + Date.now(),
-      panel_id: panelId,
-      sub_id: subId,
-      slug,
-      domain: single.domain,
-      destination_url: smartlink,
-      link_name: teamName,
-      redirect_mode: single.redirect_mode,
-      og_title: single.og_title,
-      og_description: single.og_description,
-      og_image: single.og_image,
-      clicks: 0,
-      created_at: new Date().toISOString(),
-    };
-    setLinks((prev) => [link, ...prev]);
-    setPreview(link);
-    pushToast({ title: "Link berhasil dibuat", body: fullLink(slug, single.domain) });
-    setSingle({ ...single, slug: "" });
+  const load = () => {
+    return fetch("/api/panel/redirects")
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("Gagal memuat data."))))
+      .then((d) => {
+        setLinks(d.redirects || []);
+        setStats(d.stats || { links: 0, clicks: 0, conversions: 0, earning: 0 });
+        setSmartlink(d.panel?.smartlink_url || smartlink);
+        setPanelName(d.panel?.panel_name || panelName);
+      })
+      .catch((e) => pushToast({ title: "Gagal memuat data", body: e.message, tone: "red" }))
+      .finally(() => setLoading(false));
   };
 
-  const createBulk = (e) => {
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const api = async (url, options = {}) => {
+    const res = await fetch(url, options);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || "Terjadi kesalahan.");
+    return data;
+  };
+
+  const createSingle = async (e) => {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      const data = await api("/api/panel/redirects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "single",
+          slug: single.use_random_slug ? undefined : single.slug,
+          link_name: panelName,
+          domain: single.domain,
+          redirect_mode: single.redirect_mode,
+          og_title: single.og_title,
+          og_description: single.og_description,
+          og_image: single.og_image,
+        }),
+      });
+      const link = data.redirects[0];
+      setLinks((prev) => [link, ...prev]);
+      setStats((s) => ({ ...s, links: s.links + 1 }));
+      setPreview(link);
+      pushToast({ title: "Link berhasil dibuat", body: fullLink(link.slug, link.domain || defaultDomain) });
+      setSingle({ ...single, slug: "" });
+    } catch (err) {
+      pushToast({ title: "Gagal membuat", body: err.message, tone: "red" });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const createBulk = async (e) => {
     e.preventDefault();
     const count = Math.max(1, parseInt(bulk.count, 10) || 0);
     if (count < 1) {
       pushToast({ title: "Jumlah link minimal 1", tone: "red" });
       return;
     }
-    const created = Array.from({ length: count }, (_, i) => {
-      const slug = randomSlug(6);
-      return {
-        id: "r" + Date.now() + i,
-        panel_id: panelId,
-        sub_id: subId,
-        slug,
-        domain: bulk.domain,
-        destination_url: smartlink,
-        link_name: `${teamName} ${i + 1}`.trim(),
-        redirect_mode: bulk.redirect_mode,
-        og_title: "",
-        og_description: "",
-        og_image: "",
-        clicks: 0,
-        created_at: new Date().toISOString(),
-      };
-    });
-    setLinks((prev) => [...created, ...prev]);
-    pushToast({ title: `${created.length} link berhasil dibuat`, body: "Sub ID & Smartlink otomatis tertanam." });
+    setBusy(true);
+    try {
+      const data = await api("/api/panel/redirects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "bulk",
+          count,
+          domain: bulk.domain,
+          redirect_mode: bulk.redirect_mode,
+        }),
+      });
+      const created = data.redirects || [];
+      setLinks((prev) => [...created, ...prev]);
+      setStats((s) => ({ ...s, links: s.links + created.length }));
+      pushToast({ title: `${created.length} link berhasil dibuat`, body: "Sub ID & Smartlink otomatis tertanam." });
+    } catch (err) {
+      pushToast({ title: "Gagal membuat", body: err.message, tone: "red" });
+    } finally {
+      setBusy(false);
+    }
   };
+
+  const subId = session.sub_id;
 
   return (
     <div>
@@ -121,7 +146,9 @@ export default function PanelDashboard() {
         <div>
           Sub ID <span className="font-mono font-bold">{subId}</span> full Access fitur. Setiap link sudah mengarah ke Smartlink.
         </div>
-      </div>      <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
+      </div>
+
+      <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
         <StatCard icon="link" label="Total Link" value={formatNumber(stats.links)} tone="sky" />
         <StatCard icon="chart" label="Total Click" value={formatNumber(stats.clicks)} tone="violet" />
         <StatCard icon="bolt" label="Conversion" value={formatNumber(stats.conversions)} tone="emerald" />
@@ -149,7 +176,7 @@ export default function PanelDashboard() {
             <div className="mb-4 bg-navy border border-line rounded-lg px-3.5 py-3 space-y-1.5">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-xs text-muted shrink-0">Nama Link</span>
-                <span className="text-sm font-bold text-right">{teamName}</span>
+                <span className="text-sm font-bold text-right">{panelName}</span>
               </div>
               <div className="flex items-center justify-between gap-2">
                 <span className="text-xs text-muted shrink-0">Destinasi</span>
@@ -174,7 +201,7 @@ export default function PanelDashboard() {
                   <DomainSelect
                     value={single.domain}
                     onChange={(v) => setSingle({ ...single, domain: v })}
-                    domains={activeDomains}
+                    domains={domains}
                   />
                 </Field>
                 <RedirectModeField value={single.redirect_mode} onChange={(v) => setSingle({ ...single, redirect_mode: v })} />
@@ -187,8 +214,8 @@ export default function PanelDashboard() {
                 <Field label="OG Image URL">
                   <input value={single.og_image} onChange={(e) => setSingle({ ...single, og_image: e.target.value })} placeholder="https://...gambar.jpg" className={inputCls} />
                 </Field>
-                <button type="submit" className="w-full py-2.5 rounded-lg bg-emerald text-navy text-sm font-bold hover:bg-emerald-dim transition-colors">
-                  Buat Link
+                <button type="submit" disabled={busy} className="w-full py-2.5 rounded-lg bg-emerald text-navy text-sm font-bold hover:bg-emerald-dim transition-colors disabled:opacity-60">
+                  {busy ? "Membuat..." : "Buat Link"}
                 </button>
               </form>
             ) : (
@@ -208,7 +235,7 @@ export default function PanelDashboard() {
                     <DomainSelect
                       value={bulk.domain}
                       onChange={(v) => setBulk({ ...bulk, domain: v })}
-                      domains={activeDomains}
+                      domains={domains}
                     />
                   </Field>
                 </div>
@@ -216,8 +243,8 @@ export default function PanelDashboard() {
                 <p className="text-xs text-muted -mt-1">
                   Cukup set jumlah link & pilih domain — {Math.max(1, parseInt(bulk.count, 10) || 1)} link langsung dibuat dengan slug acak, Sub ID & Smartlink otomatis tertanam.
                 </p>
-                <button type="submit" className="w-full py-2.5 rounded-lg bg-emerald text-navy text-sm font-bold hover:bg-emerald-dim transition-colors">
-                  Generate {Math.max(1, parseInt(bulk.count, 10) || 1)} Link
+                <button type="submit" disabled={busy} className="w-full py-2.5 rounded-lg bg-emerald text-navy text-sm font-bold hover:bg-emerald-dim transition-colors disabled:opacity-60">
+                  {busy ? "Membuat..." : `Generate ${Math.max(1, parseInt(bulk.count, 10) || 1)} Link`}
                 </button>
               </form>
             )}
@@ -227,7 +254,7 @@ export default function PanelDashboard() {
         <div className="lg:col-span-3 bg-surface border border-line rounded-xl overflow-hidden">
           <div className="px-5 py-4 border-b border-line flex items-center justify-between">
             <h2 className="font-bold">Daftar Link Kamu</h2>
-            <span className="text-xs text-muted">{links.length} link</span>
+            <span className="text-xs text-muted">{loading ? "Memuat..." : `${links.length} link`}</span>
           </div>
           <div className="overflow-x-auto max-h-[560px] overflow-y-auto">
             <table className="w-full text-sm">
@@ -261,11 +288,16 @@ export default function PanelDashboard() {
                     </td>
                   </tr>
                 ))}
-                {links.length === 0 && (
+                {!loading && links.length === 0 && (
                   <tr>
                     <td colSpan={4} className="px-5 py-10 text-center text-muted">
                       Belum ada link. Buat link pertama kamu di kolom sebelah kiri.
                     </td>
+                  </tr>
+                )}
+                {loading && (
+                  <tr>
+                    <td colSpan={4} className="px-5 py-10 text-center text-muted">Memuat...</td>
                   </tr>
                 )}
               </tbody>
@@ -370,8 +402,8 @@ function DomainSelect({ value, onChange, domains }) {
       className="w-full bg-navy border border-line rounded-lg px-3.5 py-2.5 text-sm focus:outline-none focus:border-emerald/60 focus:ring-2 focus:ring-emerald/20"
     >
       {domains.map((d) => (
-        <option key={d.id} value={d.name}>
-          {d.name}
+        <option key={d} value={d}>
+          {d}
         </option>
       ))}
     </select>

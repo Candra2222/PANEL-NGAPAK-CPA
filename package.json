@@ -9,7 +9,10 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.112.3",
+    "bcryptjs": "^3.0.3",
     "country-flag-icons": "^1.6.20",
+    "jose": "^6.2.8",
     "next": "16.3.0",
     "react": "19.2.8",
     "react-dom": "19.2.8",

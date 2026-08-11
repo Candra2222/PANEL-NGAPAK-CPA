@@ -3,16 +3,14 @@
 import { useRouter } from "next/navigation";
 import LoginLayout from "@/components/LoginLayout";
 import LoginForm from "@/components/LoginForm";
-import { setAuthed } from "@/lib/auth";
+import { login } from "@/lib/auth";
 import { pushToast } from "@/components/ToastStack";
 
 export default function AdminLogin() {
   const router = useRouter();
 
   const onLogin = async (password) => {
-    await new Promise((r) => setTimeout(r, 700));
-    if (password.length < 3) throw new Error("Password minimal 3 karakter.");
-    setAuthed("admin");
+    await login("admin", password);
     pushToast({ title: "Berhasil masuk", body: "Selamat datang di Admin Panel." });
     router.push("/admin/dashboard");
   };
@@ -23,6 +21,7 @@ export default function AdminLogin() {
         accent="emerald"
         title="Masuk sebagai Admin"
         subtitle="Login hanya dengan password. Tanpa username."
+        hint="Password diatur saat setup (env INITIAL_ADMIN_PASSWORD)."
         onLogin={onLogin}
       />
     </LoginLayout>

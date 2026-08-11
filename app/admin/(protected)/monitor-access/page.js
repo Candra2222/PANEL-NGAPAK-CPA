@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import PageHeader from "@/components/PageHeader";
 import CopyButton from "@/components/CopyButton";
 import StatCard from "@/components/StatCard";
@@ -10,37 +10,68 @@ import { pushToast } from "@/components/ToastStack";
 export default function MonitorAccess() {
   const [newPassword, setNewPassword] = useState(null);
   const [pwInput, setPwInput] = useState("");
+  const [status, setStatus] = useState(null);
+  const [loading, setLoading] = useState(false);
 
-  const save = (e) => {
+  useEffect(() => {
+    let active = true;
+    fetch("/api/admin/monitor-access")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => active && setStatus(d));
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const save = async (e) => {
     e.preventDefault();
-    if (pwInput.trim().length < 3) {
+    if (pwInput.trim() && pwInput.trim().length < 3) {
       pushToast({ title: "Password terlalu pendek", body: "Minimal 3 karakter.", tone: "red" });
       return;
     }
-    setNewPassword(pwInput.trim());
-    setPwInput("");
-    pushToast({ title: "Password Monitor diganti", body: "Password baru ditampilkan. Bagikan ke semua member." });
+    setLoading(true);
+    try {
+      const res = await fetch("/api/admin/monitor-access", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "reset", password: pwInput.trim() || undefined }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Gagal mengganti password.");
+      setNewPassword(data.password);
+      setPwInput("");
+      setStatus({ exists: true });
+      pushToast({
+        title: "Password Monitor diganti",
+        body: pwInput.trim() ? "Password baru ditampilkan. Bagikan ke semua member." : "Password acak baru dibuat. Bagikan ke semua member.",
+      });
+    } catch (err) {
+      pushToast({ title: "Gagal", body: err.message, tone: "red" });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
     <div>
       <PageHeader
         title="Password Panel 3 — Realtime Monitor"
-        desc="Satu password bersama yang dipakai semua member untuk melihat data gabungan seluruh Sub ID. Password ditulis manual oleh admin."
+        desc="Satu password bersama yang dipakai semua member untuk melihat data gabungan seluruh Sub ID. Bisa ditulis manual atau digenerate otomatis."
         actions={
           <div className="flex items-center gap-2">
             <input
               value={pwInput}
               onChange={(e) => setPwInput(e.target.value)}
-              placeholder="Tulis password baru..."
-              className="w-56 bg-navy border border-line rounded-lg px-3.5 py-2 text-sm focus:outline-none focus:border-emerald/60 focus:ring-2 focus:ring-emerald/20"
+              placeholder="Kosongkan utk generate otomatis..."
+              className="w-60 bg-navy border border-line rounded-lg px-3.5 py-2 text-sm focus:outline-none focus:border-emerald/60 focus:ring-2 focus:ring-emerald/20"
             />
             <button
               onClick={save}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-emerald text-navy text-sm font-bold hover:bg-emerald-dim transition-colors"
+              disabled={loading}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-emerald text-navy text-sm font-bold hover:bg-emerald-dim transition-colors disabled:opacity-60"
             >
               <Icon name="reset" className="w-4 h-4" />
-              Ganti Password
+              {loading ? "Menyimpan..." : "Ganti Password"}
             </button>
           </div>
         }
@@ -55,7 +86,8 @@ export default function MonitorAccess() {
       <div className="bg-surface border border-line rounded-xl p-6 max-w-2xl">
         <h2 className="font-bold mb-1">Password Saat Ini</h2>
         <p className="text-sm text-muted mb-5">
-          Password disimpan terenkripsi (bukan di-hash), sehingga admin tetap bisa membacanya kembali saat dibutuhkan.
+          Password disimpan sebagai bcrypt hash (tidak bisa dibaca ulang). Saat diganti, password baru
+          ditampilkan sekali untuk disalin & dibagikan.
         </p>
 
         {newPassword ? (
@@ -76,11 +108,17 @@ export default function MonitorAccess() {
             <div className="flex items-center gap-3">
               <Icon name="key" className="w-5 h-5 text-muted" />
               <div>
-                <div className="text-sm font-semibold">Status: Terkunci</div>
-                <div className="text-xs text-muted">Tulis password baru di kolom atas lalu tekan Ganti Password.</div>
+                <div className="text-sm font-semibold">
+                  Status: {status === null ? "Memeriksa..." : status.exists ? "Aktif" : "Belum di-set"}
+                </div>
+                <div className="text-xs text-muted">
+                  {status?.exists
+                    ? "Password sudah dibuat. Ganti kapan saja untuk me-reset."
+                    : "Belum ada password Panel 3. Tulis atau biarkan kosong lalu tekan Ganti Password."}
+                </div>
               </div>
             </div>
-            <BadgeGrey>Encrypted</BadgeGrey>
+            <BadgeGrey>{status?.exists ? "Hashed" : "Pending"}</BadgeGrey>
           </div>
         )}
       </div>
