@@ -20,8 +20,8 @@ export default function PanelLogin() {
       <LoginForm
         accent="sky"
         title="Masuk ke Panel Member"
-        subtitle="1 password = 1 Sub ID. Password didapat dari admin."
-        hint="Password dikirim oleh admin (per Sub ID)."
+        subtitle=""
+        hint=""
         onLogin={onLogin}
       />
     </LoginLayout>

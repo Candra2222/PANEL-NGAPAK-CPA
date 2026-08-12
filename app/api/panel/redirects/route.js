@@ -124,3 +124,26 @@ export async function POST(request) {
 
   return json({ ok: true, redirects: created || [] });
 }
+
+export async function DELETE() {
+  const { session } = await requireSession("panel");
+  if (!session) return error("Unauthorized.", 401);
+
+  const supabase = supabaseAdmin();
+
+  const { data: panel, error: panelError } = await supabase
+    .from("panels")
+    .select("id, is_active")
+    .eq("id", session.panel_id)
+    .maybeSingle();
+  if (panelError) return error("Gagal memuat member.", 500);
+  if (!panel || !panel.is_active) return error("Akun member dinonaktifkan.", 403);
+
+  const { error: deleteError } = await supabase
+    .from("redirects")
+    .delete()
+    .eq("panel_id", session.panel_id);
+  if (deleteError) return error("Gagal menghapus semua link.", 500, { detail: deleteError.message });
+
+  return json({ ok: true });
+}

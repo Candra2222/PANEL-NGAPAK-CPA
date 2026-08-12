@@ -8,15 +8,16 @@ import StatCard from "@/components/StatCard";
 import { Icon } from "@/components/icons";
 import { pushToast } from "@/components/ToastStack";
 import { MonitorCtx } from "../monitor-context";
-import { DeviceLogo, BrowserLogo, CountryFlag } from "@/components/BrandLogo";
+import { DeviceLogo, BrowserLogo, AppLogo, CountryFlag } from "@/components/BrandLogo";
 import { FaCrown } from "react-icons/fa";
 import { playLeadSound } from "@/lib/sound";
-import { formatNumber, formatCurrency } from "@/lib/mock-data";
-import { WIB, todayISO, startOfConversionDay } from "@/lib/conversion-day";
+import { formatNumber, formatCurrency, dateTime } from "@/lib/mock-data";
+import { todayISO, startOfConversionDay } from "@/lib/conversion-day";
 
-const dateISO = (d) => {
-  const wib = new Date(d.getTime() + WIB);
-  return `${wib.getUTCFullYear()}-${String(wib.getUTCMonth() + 1).padStart(2, "0")}-${String(wib.getUTCDate()).padStart(2, "0")}`;
+const shiftISO = (dateStr, days) => {
+  const d = new Date(dateStr + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
 };
 
 const formatDate = (dateStr) =>
@@ -87,23 +88,19 @@ function ReportView() {
 
   const applyRange = (key) => {
     if (key === "custom") return;
-    const now = new Date();
-    const a = new Date(now);
+    const today = todayISO();
     if (key === "today") {
-      setFrom(todayISO());
-      setTo(todayISO());
+      setFrom(today);
+      setTo(today);
     } else if (key === "yesterday") {
-      a.setDate(a.getDate() - 1);
-      setFrom(dateISO(a));
-      setTo(dateISO(a));
+      setFrom(shiftISO(today, -1));
+      setTo(shiftISO(today, -1));
     } else if (key === "week") {
-      a.setDate(a.getDate() - 6);
-      setFrom(dateISO(a));
-      setTo(todayISO());
+      setFrom(shiftISO(today, -6));
+      setTo(today);
     } else if (key === "month") {
-      a.setDate(a.getDate() - 29);
-      setFrom(dateISO(a));
-      setTo(todayISO());
+      setFrom(shiftISO(today, -29));
+      setTo(today);
     }
     setRange(key);
   };
@@ -119,7 +116,7 @@ function ReportView() {
     <div>
       <PageHeader
         title="Report"
-        desc="UNTUK CEK HASIL KESELURUHAN TIM"
+        desc="Untuk cek hasil keseluruhan tim"
         actions={
           <div className="flex items-center gap-2 flex-wrap">
             <Select value={range} onChange={applyRange}>
@@ -255,7 +252,6 @@ function RealtimeView() {
 
   useEffect(() => {
     let cancelled = false;
-    setReady(false);
     const params = new URLSearchParams({ range });
     if (filterSubId !== "all") params.set("sub_id", filterSubId);
     fetch(`/api/monitor/stats?${params}`)
@@ -266,7 +262,11 @@ function RealtimeView() {
         const conversions = d.conversions || [];
         const baseIds = new Set([...feed, ...conversions].map((x) => x.id));
         seenIds.current = new Set([...seenIds.current, ...baseIds]);
-        newestRef.current = null;
+        const newestBase = [...feed, ...conversions].reduce((max, x) => {
+          const ts = new Date(x.created_at).getTime();
+          return !isNaN(ts) && ts > max ? ts : max;
+        }, newestRef.current || 0);
+        newestRef.current = newestBase || null;
         setBase({
           feed,
           conversions,
@@ -286,7 +286,7 @@ function RealtimeView() {
   }, [range, filterSubId]);
 
   const handleLive = useCallback(
-    (ev, type) => {
+    (ev, type, notify = true) => {
       if (!ev || !ev.id) return;
       if (!ready) return;
       if (seenIds.current.has(ev.id)) return;
@@ -304,6 +304,7 @@ function RealtimeView() {
         setLastEvent({ ...ev, type: "conversion" });
         setFlashId(ev.id);
         refreshOverview();
+        if (!notify) return;
         if (soundOn) playLeadSound();
         pushToast({
           title: "Lead Baru!",
@@ -356,12 +357,13 @@ function RealtimeView() {
       try {
         const params = new URLSearchParams({ range });
         if (filterSubId !== "all") params.set("sub_id", filterSubId);
+        const hasSince = !!newestRef.current;
         if (newestRef.current) params.set("since", new Date(newestRef.current).toISOString());
         const res = await fetch(`/api/monitor/live?${params}`);
         if (!res.ok) return;
         const d = await res.json();
-        (d.traffic || []).forEach((t) => handleLive(t, "traffic"));
-        (d.conversions || []).forEach((c) => handleLive(c, "conversion"));
+        (d.traffic || []).forEach((t) => handleLive(t, "traffic", false));
+        (d.conversions || []).forEach((c) => handleLive(c, "conversion", hasSince));
       } catch {}
     };
     poll();
@@ -428,7 +430,7 @@ function RealtimeView() {
   }, [filteredConvs]);
 
   const ctr = totalClicks > 0 ? ((totalConversions / totalClicks) * 100).toFixed(2) : "0.00";
-  const { subIds, redirectById } = base;
+  const { subIds } = base;
 
   return (
     <div>
@@ -439,13 +441,13 @@ function RealtimeView() {
           <span className="font-normal text-muted text-xs">(+{formatNumber(liveCount)} event baru sesi ini)</span>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <Select value={filterSubId} onChange={setFilterSubId}>
+          <Select value={filterSubId} onChange={(v) => { setFilterSubId(v); setReady(false); }}>
             <option value="all">All Sub ID</option>
             {subIds.map((s) => (
               <option key={s} value={s}>{s}</option>
             ))}
           </Select>
-          <Select value={range} onChange={setRange}>
+          <Select value={range} onChange={(v) => { setRange(v); setReady(false); }}>
             {RANGES.map((r) => (
               <option key={r.key} value={r.key}>{r.label}</option>
             ))}
@@ -500,7 +502,7 @@ function RealtimeView() {
               <thead className="sticky top-0 bg-surface">
                 <tr className="text-left text-xs text-muted uppercase tracking-wide border-b border-line">
                   <th className="px-5 py-3 font-semibold">No</th>
-                  <th className="px-5 py-3 font-semibold">Referrer</th>
+                  <th className="px-5 py-3 font-semibold">City</th>
                   <th className="px-5 py-3 font-semibold">Sub ID</th>
                   <th className="px-5 py-3 font-semibold">Country</th>
                   <th className="px-5 py-3 font-semibold">Device</th>
@@ -513,27 +515,20 @@ function RealtimeView() {
                   <tr key={e.id} className={`border-b border-line/50 last:border-0 hover:bg-surface-2/50${e.id === flashId ? " animate-row-flash" : ""}`}>
                     <td className="px-5 py-3 text-muted tabular-nums text-xs">{i + 1}</td>
                     <td className="px-5 py-3">
-                      <span
-                        className="font-mono text-[11px] text-sky truncate max-w-[220px] inline-block align-middle"
-                        title={redirectById[e.redirect_id]?.destination_url || ""}
-                      >
-                        {redirectById[e.redirect_id]?.destination_url ?? "-"}
-                      </span>
+                      {e.region || e.city ? (
+                        <div>
+                          <div className="text-xs text-sky font-semibold">{e.region || e.city}</div>
+                          {e.region && e.city && <div className="text-[11px] text-muted">{e.city}</div>}
+                          {e.postal_code && <div className="text-[11px] text-muted tabular-nums">{e.postal_code}</div>}
+                        </div>
+                      ) : (
+                        <span className="text-xs text-muted">-</span>
+                      )}
                     </td>
                     <td className="px-5 py-3 font-mono text-xs text-emerald">{e.sub_id}</td>
                     <td className="px-5 py-3"><CountryFlag country={e.country} size={18} /></td>
-                    <td className="px-5 py-3">
-                      <span className="flex items-center gap-1.5">
-                        <DeviceLogo device={e.os_device} size={16} />
-                        <span className="text-xs text-muted">{e.os_device || "-"}</span>
-                      </span>
-                    </td>
-                    <td className="px-5 py-3">
-                      <span className="flex items-center gap-1.5">
-                        <BrowserLogo browser={e.browser_app} size={16} />
-                        <span className="text-xs text-muted">{e.browser_app || "-"}</span>
-                      </span>
-                    </td>
+                    <td className="px-5 py-3"><DeviceCell device={e.os_device} /></td>
+                    <td className="px-5 py-3"><AppCell app={e.app} browser={e.browser_app} /></td>
                     <td className="px-5 py-3 font-mono text-xs text-muted">{e.ip_address || "-"}</td>
                   </tr>
                 ))}
@@ -554,8 +549,9 @@ function RealtimeView() {
                   <th className="px-5 py-3 font-semibold">Network</th>
                   <th className="px-5 py-3 font-semibold">Device</th>
                   <th className="px-5 py-3 font-semibold">App</th>
-                  <th className="px-5 py-3 font-semibold text-right">Earning</th>
+                  <th className="pl-5 pr-14 py-3 font-semibold text-right">Earning</th>
                   <th className="px-5 py-3 font-semibold">IP</th>
+                  <th className="px-5 py-3 font-semibold">Date</th>
                 </tr>
               </thead>
               <tbody>
@@ -572,25 +568,16 @@ function RealtimeView() {
                     </td>
                     <td className="px-5 py-3"><CountryFlag country={c.country} size={18} /></td>
                     <td className="px-5 py-3 text-muted text-xs">{c.network_name}</td>
-                    <td className="px-5 py-3">
-                      <span className="flex items-center gap-1.5">
-                        <DeviceLogo device={c.os_device} size={16} />
-                        <span className="text-xs text-muted">{c.os_device || "-"}</span>
-                      </span>
-                    </td>
-                    <td className="px-5 py-3">
-                      <span className="flex items-center gap-1.5">
-                        <BrowserLogo browser={c.browser_app} size={16} />
-                        <span className="text-xs text-muted">{c.browser_app || "-"}</span>
-                      </span>
-                    </td>
-                    <td className="px-5 py-3 text-right font-semibold text-emerald">{formatCurrency(c.earning, currency)}</td>
+                    <td className="px-5 py-3"><DeviceCell device={c.os_device} /></td>
+                    <td className="px-5 py-3"><AppCell app={c.app} browser={c.browser_app} /></td>
+                    <td className="pl-5 pr-14 py-3 text-right font-semibold text-emerald whitespace-nowrap tabular-nums">{formatCurrency(c.earning, currency)}</td>
                     <td className="px-5 py-3 font-mono text-xs text-muted">{c.ip_address || "-"}</td>
+                    <td className="px-5 py-3 text-xs text-muted whitespace-nowrap tabular-nums">{dateTime(c.created_at)}</td>
                   </tr>
                 ))}
                 {filteredConvs.length === 0 && (
                   <tr>
-                    <td colSpan={8} className="px-5 py-10 text-center text-muted">Belum ada conversion untuk filter ini.</td>
+                    <td colSpan={9} className="px-5 py-10 text-center text-muted">Belum ada conversion untuk filter ini.</td>
                   </tr>
                 )}
               </tbody>
@@ -599,6 +586,22 @@ function RealtimeView() {
         </div>
       </div>
     </div>
+  );
+}
+
+function DeviceCell({ device }) {
+  return (
+    <span className="flex items-center gap-1.5">
+      <DeviceLogo device={device} size={16} />
+    </span>
+  );
+}
+
+function AppCell({ app, browser }) {
+  return (
+    <span className="flex items-center gap-1.5">
+      {app ? <AppLogo app={app} size={16} /> : <BrowserLogo browser={browser} size={16} />}
+    </span>
   );
 }
 

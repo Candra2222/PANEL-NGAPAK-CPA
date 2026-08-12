@@ -20,8 +20,8 @@ export default function AdminLogin() {
       <LoginForm
         accent="emerald"
         title="Masuk sebagai Admin"
-        subtitle="Login hanya dengan password. Tanpa username."
-        hint="Password diatur saat setup (env INITIAL_ADMIN_PASSWORD)."
+        subtitle=""
+        hint=""
         onLogin={onLogin}
       />
     </LoginLayout>

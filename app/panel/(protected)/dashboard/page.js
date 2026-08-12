@@ -24,6 +24,9 @@ export default function PanelDashboard() {
 
   const [tab, setTab] = useState("single");
   const [preview, setPreview] = useState(null);
+  const [ogPrompt, setOgPrompt] = useState(false);
+  const [deleteAllPrompt, setDeleteAllPrompt] = useState(false);
+  const [deleteOneTarget, setDeleteOneTarget] = useState(null);
 
   const [single, setSingle] = useState({
     slug: "",
@@ -66,8 +69,7 @@ export default function PanelDashboard() {
     return data;
   };
 
-  const createSingle = async (e) => {
-    e.preventDefault();
+  const submitSingle = async (mode) => {
     setBusy(true);
     try {
       const data = await api("/api/panel/redirects", {
@@ -78,7 +80,7 @@ export default function PanelDashboard() {
           slug: single.use_random_slug ? undefined : single.slug,
           link_name: panelName,
           domain: single.domain,
-          redirect_mode: single.redirect_mode,
+          redirect_mode: mode,
           og_title: single.og_title,
           og_description: single.og_description,
           og_image: single.og_image,
@@ -95,6 +97,16 @@ export default function PanelDashboard() {
     } finally {
       setBusy(false);
     }
+  };
+
+  const createSingle = async (e) => {
+    e.preventDefault();
+    const ogEmpty = !single.og_title.trim() && !single.og_description.trim() && !single.og_image.trim();
+    if (ogEmpty) {
+      setOgPrompt(true);
+      return;
+    }
+    submitSingle(single.redirect_mode);
   };
 
   const createBulk = async (e) => {
@@ -122,6 +134,42 @@ export default function PanelDashboard() {
       pushToast({ title: `${created.length} link berhasil dibuat`, body: "Sub ID & Smartlink otomatis tertanam." });
     } catch (err) {
       pushToast({ title: "Gagal membuat", body: err.message, tone: "red" });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const confirmDeleteLink = (l) => {
+    setDeleteOneTarget(l);
+  };
+
+  const deleteLink = async () => {
+    const l = deleteOneTarget;
+    if (!l) return;
+    setBusy(true);
+    try {
+      await api(`/api/panel/redirects/${l.id}`, { method: "DELETE" });
+      setLinks((prev) => prev.filter((x) => x.id !== l.id));
+      setStats((s) => ({ ...s, links: s.links - 1 }));
+      setDeleteOneTarget(null);
+      pushToast({ title: "Link dihapus", body: fullLink(l.slug, l.domain || defaultDomain), tone: "red" });
+    } catch (err) {
+      pushToast({ title: "Gagal menghapus", body: err.message, tone: "red" });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const deleteAll = async () => {
+    setBusy(true);
+    try {
+      await api("/api/panel/redirects", { method: "DELETE" });
+      setLinks([]);
+      setStats((s) => ({ ...s, links: 0 }));
+      setDeleteAllPrompt(false);
+      pushToast({ title: "Semua link dihapus", body: "Daftar link kamu sekarang kosong.", tone: "red" });
+    } catch (err) {
+      pushToast({ title: "Gagal menghapus", body: err.message, tone: "red" });
     } finally {
       setBusy(false);
     }
@@ -260,7 +308,19 @@ export default function PanelDashboard() {
         <div className="lg:col-span-3 bg-surface border border-line rounded-xl overflow-hidden">
           <div className="px-5 py-4 border-b border-line flex items-center justify-between">
             <h2 className="font-bold">Daftar Link Kamu</h2>
-            <span className="text-xs text-muted">{loading ? "Memuat..." : `${links.length} link`}</span>
+            <div className="flex items-center gap-2.5">
+              {!loading && links.length > 0 && (
+                <button
+                  onClick={() => setDeleteAllPrompt(true)}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-semibold text-red-400 border border-red-500/30 bg-red-500/10 hover:bg-red-500/20 transition-colors"
+                  title="Hapus semua link"
+                >
+                  <Icon name="trash" className="w-3.5 h-3.5" />
+                  Hapus Semua
+                </button>
+              )}
+              <span className="text-xs text-muted">{loading ? "Memuat..." : `${links.length} link`}</span>
+            </div>
           </div>
           <div className="overflow-x-auto max-h-[560px] overflow-y-auto">
             <table className="w-full text-sm">
@@ -279,7 +339,7 @@ export default function PanelDashboard() {
                       <div className="font-semibold font-mono text-xs text-emerald">{l.sub_id}</div>
                       <div className="text-xs text-muted truncate max-w-[200px]" title={l.destination_url}>{l.destination_url}</div>
                       {l.redirect_mode === "spinner" && (
-                        <div className="text-[10px] text-amber-300 mt-0.5">spinner 0.2s</div>
+                        <div className="text-[10px] text-amber-300 mt-0.5">spinner 2s</div>
                       )}
                     </td>
                     <td className="px-5 py-3 font-mono text-xs text-muted">{l.slug}</td>
@@ -290,6 +350,9 @@ export default function PanelDashboard() {
                           <Icon name="eye" className="w-4 h-4" />
                         </button>
                         <CopyButton text={fullLink(l.slug, l.domain || defaultDomain)} />
+                        <button onClick={() => confirmDeleteLink(l)} className="p-1.5 rounded-lg text-muted hover:text-red-400 hover:bg-red-500/10 transition-colors" title="Hapus">
+                          <Icon name="trash" className="w-4 h-4" />
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -312,6 +375,76 @@ export default function PanelDashboard() {
         </div>
       </div>
 
+      {ogPrompt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/70" onClick={() => setOgPrompt(false)} />
+          <div className="relative w-full max-w-md bg-surface border border-line rounded-2xl p-6 animate-toast-in">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-bold text-lg">OG Meta Belum Diisi</h3>
+              <button onClick={() => setOgPrompt(false)} className="text-muted hover:text-foreground" aria-label="Tutup">
+                <Icon name="x" className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg px-3.5 py-3 text-sm text-amber-300 mb-5">
+              Mohon isi terlebih dahulu kolom <span className="font-semibold">OG Title</span>, <span className="font-semibold">OG Description</span>, dan <span className="font-semibold">OG Image URL</span> sebelum membuat link. Link tidak dibuat sampai semua field OG terisi.
+            </div>
+            <button onClick={() => setOgPrompt(false)} className="w-full py-2.5 rounded-lg bg-emerald text-navy text-sm font-bold hover:bg-emerald-dim transition-colors">
+              Mengerti
+            </button>
+          </div>
+        </div>
+      )}
+
+      {deleteOneTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/70" onClick={() => setDeleteOneTarget(null)} />
+          <div className="relative w-full max-w-md bg-surface border border-line rounded-2xl p-6 animate-toast-in">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-bold text-lg">Hapus Link</h3>
+              <button onClick={() => setDeleteOneTarget(null)} className="text-muted hover:text-foreground" aria-label="Tutup">
+                <Icon name="x" className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="bg-red-500/10 border border-red-500/30 rounded-lg px-3.5 py-3 text-sm text-red-300 mb-5">
+              Kamu akan menghapus link <span className="font-mono font-semibold text-red-200">/{deleteOneTarget.slug}</span>. Tindakan ini tidak bisa dibatalkan. Yakin mau lanjut?
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => setDeleteOneTarget(null)} className="flex-1 py-2.5 rounded-lg border border-line text-sm font-semibold text-muted hover:text-foreground transition-colors">
+                Batal
+              </button>
+              <button onClick={deleteLink} disabled={busy} className="flex-1 py-2.5 rounded-lg bg-red-500 text-white text-sm font-bold hover:bg-red-600 transition-colors disabled:opacity-60">
+                {busy ? "Menghapus..." : "Hapus Link"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {deleteAllPrompt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/70" onClick={() => setDeleteAllPrompt(false)} />
+          <div className="relative w-full max-w-md bg-surface border border-line rounded-2xl p-6 animate-toast-in">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-bold text-lg">Hapus Semua Link</h3>
+              <button onClick={() => setDeleteAllPrompt(false)} className="text-muted hover:text-foreground" aria-label="Tutup">
+                <Icon name="x" className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="bg-red-500/10 border border-red-500/30 rounded-lg px-3.5 py-3 text-sm text-red-300 mb-5">
+              Kamu akan menghapus <span className="font-bold">{links.length}</span> link sekaligus. Tindakan ini tidak bisa dibatalkan. Yakin mau lanjut?
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => setDeleteAllPrompt(false)} className="flex-1 py-2.5 rounded-lg border border-line text-sm font-semibold text-muted hover:text-foreground transition-colors">
+                Batal
+              </button>
+              <button onClick={deleteAll} disabled={busy} className="flex-1 py-2.5 rounded-lg bg-red-500 text-white text-sm font-bold hover:bg-red-600 transition-colors disabled:opacity-60">
+                {busy ? "Menghapus..." : "Hapus Semua"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {preview && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/70" onClick={() => setPreview(null)} />
@@ -325,7 +458,7 @@ export default function PanelDashboard() {
             <div className="bg-navy border border-emerald/30 rounded-lg p-4 space-y-2.5">
               <Row label="Nama" value={preview.link_name} />
               <Row label="Sub ID" value={preview.sub_id} mono />
-              <Row label="Mode Redirect" value={preview.redirect_mode === "spinner" ? "Spinner 0.2 detik" : "Langsung redirect"} />
+              <Row label="Mode Redirect" value={preview.redirect_mode === "spinner" ? "Spinner 2 detik" : "Langsung redirect"} />
               <div>
                 <div className="text-xs text-muted mb-1">Destinasi (Smartlink admin)</div>
                 <div className="text-xs text-muted break-all">{preview.destination_url}</div>
@@ -370,12 +503,12 @@ function RedirectModeField({ value, onChange }) {
           onClick={() => onChange("spinner")}
           className={`flex-1 py-2 px-3 text-xs font-bold transition-colors ${value === "spinner" ? "bg-emerald text-navy" : "bg-surface-2 text-muted hover:text-foreground"}`}
         >
-          Spinner 0.2 detik
+          Spinner 2 detik
         </button>
       </div>
       {value === "spinner" && (
         <p className="text-[11px] text-amber-300 mt-1.5">
-          Aman diposting di FB, IG, Threads & aplikasi lain — redirect melewati spinner tipis 0.2 detik.
+          Aman diposting di FB, IG, Threads &amp; aplikasi lain — redirect melewati spinner tipis 2 detik.
         </p>
       )}
     </div>

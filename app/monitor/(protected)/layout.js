@@ -145,7 +145,7 @@ export default function MonitorLayout({ children }) {
     };
   }, [router]);
 
-  const totalEarning = overview?.totals?.earning || 0;
+  const totalEarning = overview?.allEarning ?? overview?.totals?.earning ?? 0;
 
   return (
     <MonitorCtx.Provider value={{ currency, setCurrency, view, setView, overview, refreshOverview }}>
@@ -158,7 +158,7 @@ export default function MonitorLayout({ children }) {
         sidebar={<SidebarWidgets currency={currency} />}
         showClock
         headerTitle="Realtime Monitor"
-        headerStat={{ label: "Total Earning Hari Ini", value: formatCurrency(totalEarning, currency) }}
+        headerStat={{ label: "Total Earning", value: formatCurrency(totalEarning, currency) }}
       >
         <ToastStack />
         {children}

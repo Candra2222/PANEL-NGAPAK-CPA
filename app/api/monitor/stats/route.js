@@ -4,6 +4,53 @@ import { startOfConversionDay, rangeBounds } from "@/lib/conversion-day";
 
 export const dynamic = "force-dynamic";
 
+const FEED_COLS_APP =
+  "id, redirect_id, sub_id, country, region, city, postal_code, browser_app, os_device, app, ip_address, created_at";
+const FEED_COLS =
+  "id, redirect_id, sub_id, country, region, city, postal_code, browser_app, os_device, ip_address, created_at";
+const FEED_COLS_CITY =
+  "id, redirect_id, sub_id, country, city, browser_app, os_device, ip_address, created_at";
+const FEED_COLS_MIN =
+  "id, redirect_id, sub_id, country, browser_app, os_device, ip_address, created_at";
+
+const CONV_COLS_APP =
+  "id, redirect_id, sub_id, network_name, country, earning, ip_address, browser_app, os_device, app, created_at";
+const CONV_COLS =
+  "id, redirect_id, sub_id, network_name, country, earning, ip_address, browser_app, os_device, created_at";
+
+async function fetchConversions(supabase, fromISO, toISO, subId) {
+  const build = (cols) => {
+    let q = supabase
+      .from("conversions")
+      .select(cols)
+      .gte("created_at", fromISO)
+      .lte("created_at", toISO)
+      .order("created_at", { ascending: false })
+      .limit(200);
+    if (subId && subId !== "all") q = q.eq("sub_id", subId);
+    return q;
+  };
+  let res = await build(CONV_COLS_APP);
+  if (res.error) res = await build(CONV_COLS);
+  return res;
+}
+
+async function fetchFeed(supabase, fromISO, toISO) {
+  const build = (cols) =>
+    supabase
+      .from("traffic_logs")
+      .select(cols)
+      .gte("created_at", fromISO)
+      .lte("created_at", toISO)
+      .order("created_at", { ascending: false })
+      .limit(60);
+  let res = await build(FEED_COLS_APP);
+  if (res.error) res = await build(FEED_COLS);
+  if (res.error) res = await build(FEED_COLS_CITY);
+  if (res.error) res = await build(FEED_COLS_MIN);
+  return res;
+}
+
 async function fetchRangeRows(supabase, table, columns, fromISO, toISO) {
   const page = 1000;
   const all = [];
@@ -60,20 +107,8 @@ export async function GET(request) {
   const errors = [];
 
   const [feedRes, convRes, subIdListRes, redirectsRes] = await Promise.all([
-    supabase
-      .from("traffic_logs")
-      .select("id, redirect_id, sub_id, country, browser_app, os_device, ip_address, created_at")
-      .gte("created_at", fromISO)
-      .lte("created_at", toISO)
-      .order("created_at", { ascending: false })
-      .limit(60),
-    supabase
-      .from("conversions")
-      .select("id, redirect_id, sub_id, network_name, country, earning, ip_address, browser_app, os_device, created_at")
-      .gte("created_at", fromISO)
-      .lte("created_at", toISO)
-      .order("created_at", { ascending: false })
-      .limit(200),
+    fetchFeed(supabase, fromISO, toISO),
+    fetchConversions(supabase, fromISO, toISO, subId),
     supabase.from("panels").select("sub_id"),
     supabase.from("redirects").select("id, destination_url, sub_id"),
   ]);
@@ -108,7 +143,7 @@ export async function GET(request) {
   }
   const [trafficCount, convCount] = await Promise.all([countTraffic, countConvs]);
 
-  const [reportRes, topTodayRes, topCountriesRes] = await Promise.all([
+  const [reportRes, topTodayRes, topCountriesRes, totalEarnRes] = await Promise.all([
     Promise.all([
       fetchRangeRows(supabase, "traffic_logs", "sub_id", fromISO, toISO),
       fetchRangeRows(supabase, "conversions", "sub_id, earning", fromISO, toISO),
@@ -121,6 +156,7 @@ export async function GET(request) {
       .from("conversions")
       .select("country")
       .gte("created_at", todayISO),
+    supabase.from("conversions").select("earning"),
   ]);
 
   const [reportTraffic, reportConvs] = reportRes;
@@ -155,6 +191,10 @@ export async function GET(request) {
     earning: parseFloat(rangeConvs.reduce((s, c) => s + (Number(c.earning) || 0), 0).toFixed(2)),
   };
 
+  const allEarning = parseFloat(
+    (totalEarnRes.data || []).reduce((s, c) => s + (Number(c.earning) || 0), 0).toFixed(2)
+  );
+
   if (errors.length && !feed.length && !convs.length) {
     return error("Gagal memuat data.", 500, { detail: errors[0] });
   }
@@ -164,6 +204,7 @@ export async function GET(request) {
     fromISO,
     toISO,
     totals,
+    allEarning,
     feed: filteredFeed,
     conversions: filteredConvs,
     report,

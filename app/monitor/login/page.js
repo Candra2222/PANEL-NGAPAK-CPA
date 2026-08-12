@@ -27,7 +27,7 @@ export default function MonitorLogin() {
       <LoginForm
         accent="amber"
         title="Masuk ke Monitor"
-        subtitle="Password bersama — data gabungan semua Sub ID."
+        subtitle=""
         onLogin={onLogin}
       />
     </LoginLayout>

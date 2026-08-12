@@ -72,6 +72,9 @@ create table if not exists public.traffic_logs (
   sub_id text,
   ip_address text,
   country text,
+  region text,
+  city text,
+  postal_code text,
   browser_app text,
   os_device text,
   created_at timestamptz not null default now()

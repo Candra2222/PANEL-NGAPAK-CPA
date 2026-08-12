@@ -17,6 +17,7 @@ export async function handler(request) {
   let ip = null;
   let browser = null;
   let os = null;
+  let app = null;
 
   if (request.method === "POST") {
     const contentType = request.headers.get("content-type") || "";
@@ -28,6 +29,7 @@ export async function handler(request) {
       ip = body.ip || body.ip_address || null;
       browser = body.browser || body.browser_app || null;
       os = body.os || body.os_device || null;
+      app = body.app || body.app_name || null;
     } else {
       const form = await request.formData().catch(() => new FormData());
       subId = form.get("sub_id") || form.get("subid") || form.get("sub") || null;
@@ -36,6 +38,7 @@ export async function handler(request) {
       ip = form.get("ip") || form.get("ip_address") || null;
       browser = form.get("browser") || form.get("browser_app") || null;
       os = form.get("os") || form.get("os_device") || null;
+      app = form.get("app") || form.get("app_name") || null;
     }
   } else {
     const q = request.nextUrl.searchParams;
@@ -45,12 +48,13 @@ export async function handler(request) {
     ip = q.get("ip") || q.get("ip_address") || null;
     browser = q.get("browser") || q.get("browser_app") || null;
     os = q.get("os") || q.get("os_device") || null;
+    app = q.get("app") || q.get("app_name") || null;
   }
 
   if (!subId) return json({ ok: false, error: "sub_id wajib." }, { status: 400 });
 
-  const rateIp = clientIp(request);
-  const limit = await checkRateLimit(`postback:${rateIp}`, 60, 60);
+  const requestIp = clientIp(request);
+  const limit = await checkRateLimit(`postback:${requestIp}`, 60, 60);
   if (!limit.ok) {
     return json({ ok: false, error: "Rate limited." }, { status: 429 });
   }
@@ -73,16 +77,22 @@ export async function handler(request) {
     return json({ ok: false, error: "Gagal memuat panel." }, { status: 500 });
   }
 
-  const { error: insertError } = await supabase.from("conversions").insert({
+  const insert = {
     panel_id: panel?.id || null,
     sub_id: subId,
     network_name: "Trafee",
     country: country || null,
     earning: isFinite(earning) && earning > 0 ? earning : 0,
-    ip_address: ip || null,
+    ip_address: ip || (requestIp && requestIp !== "unknown" ? requestIp : null),
     browser_app: browser || null,
     os_device: os || null,
-  });
+    app: app || null,
+  };
+  let { error: insertError } = await supabase.from("conversions").insert(insert);
+  if (insertError && app) {
+    const { app: _app, ...fallback } = insert;
+    ({ error: insertError } = await supabase.from("conversions").insert(fallback));
+  }
 
   if (insertError) {
     return json({ ok: false, error: "Gagal menyimpan konversi." }, { status: 500 });
