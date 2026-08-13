@@ -19,20 +19,35 @@ const CONV_COLS =
   "id, redirect_id, sub_id, network_name, country, earning, ip_address, browser_app, os_device, created_at";
 
 async function fetchConversions(supabase, fromISO, toISO, subId) {
-  const build = (cols) => {
-    let q = supabase
-      .from("conversions")
-      .select(cols)
-      .gte("created_at", fromISO)
-      .lte("created_at", toISO)
-      .order("created_at", { ascending: false })
-      .limit(200);
-    if (subId && subId !== "all") q = q.eq("sub_id", subId);
-    return q;
-  };
-  let res = await build(CONV_COLS_APP);
-  if (res.error) res = await build(CONV_COLS);
-  return res;
+  const page = 1000;
+  const colsList = [CONV_COLS_APP, CONV_COLS];
+  let lastError = null;
+  for (const cols of colsList) {
+    const all = [];
+    let start = 0;
+    let ok = true;
+    for (;;) {
+      let q = supabase
+        .from("conversions")
+        .select(cols)
+        .gte("created_at", fromISO)
+        .lte("created_at", toISO)
+        .order("created_at", { ascending: false })
+        .range(start, start + page - 1);
+      if (subId && subId !== "all") q = q.eq("sub_id", subId);
+      const { data, error } = await q;
+      if (error) {
+        lastError = error;
+        ok = false;
+        break;
+      }
+      all.push(...(data || []));
+      if (!data || data.length < page) break;
+      start += page;
+    }
+    if (ok) return { data: all };
+  }
+  return { data: [], error: lastError };
 }
 
 async function fetchFeed(supabase, fromISO, toISO) {

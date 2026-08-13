@@ -1,18 +1,22 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import LoginLayout from "@/components/LoginLayout";
 import LoginForm from "@/components/LoginForm";
+import LoginSuccess from "@/components/LoginSuccess";
 import { login } from "@/lib/auth";
-import { pushToast } from "@/components/ToastStack";
 
 export default function PanelLogin() {
   const router = useRouter();
+  const [done, setDone] = useState(false);
+  const [welcome, setWelcome] = useState("");
 
   const onLogin = async (password) => {
     const session = await login("panel", password);
-    pushToast({ title: "Berhasil masuk", body: `Login sebagai ${session.sub_id}.` });
-    router.push("/panel/dashboard");
+    setWelcome(`Selamat datang, ${session.sub_id || "Member"}`);
+    setDone(true);
+    setTimeout(() => router.push("/panel/dashboard"), 900);
   };
 
   return (
@@ -24,6 +28,7 @@ export default function PanelLogin() {
         hint=""
         onLogin={onLogin}
       />
+      {done && <LoginSuccess accent="sky" title="Login Berhasil" subtitle={welcome} />}
     </LoginLayout>
   );
 }

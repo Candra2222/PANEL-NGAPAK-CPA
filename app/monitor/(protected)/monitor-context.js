@@ -9,4 +9,10 @@ export const MonitorCtx = createContext({
   setView: () => {},
   overview: null,
   refreshOverview: () => {},
+  range: "today",
+  setRange: () => {},
+  reportFrom: null,
+  setReportFrom: () => {},
+  reportTo: null,
+  setReportTo: () => {},
 });

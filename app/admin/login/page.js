@@ -1,18 +1,20 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import LoginLayout from "@/components/LoginLayout";
 import LoginForm from "@/components/LoginForm";
+import LoginSuccess from "@/components/LoginSuccess";
 import { login } from "@/lib/auth";
-import { pushToast } from "@/components/ToastStack";
 
 export default function AdminLogin() {
   const router = useRouter();
+  const [done, setDone] = useState(false);
 
   const onLogin = async (password) => {
     await login("admin", password);
-    pushToast({ title: "Berhasil masuk", body: "Selamat datang di Admin Panel." });
-    router.push("/admin/dashboard");
+    setDone(true);
+    setTimeout(() => router.push("/admin/dashboard"), 900);
   };
 
   return (
@@ -24,6 +26,7 @@ export default function AdminLogin() {
         hint=""
         onLogin={onLogin}
       />
+      {done && <LoginSuccess accent="emerald" title="Login Berhasil" subtitle="Selamat datang, Administrator" />}
     </LoginLayout>
   );
 }

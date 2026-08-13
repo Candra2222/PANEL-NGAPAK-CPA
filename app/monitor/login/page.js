@@ -1,13 +1,15 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import LoginLayout from "@/components/LoginLayout";
 import LoginForm from "@/components/LoginForm";
+import LoginSuccess from "@/components/LoginSuccess";
 import { setAuthed } from "@/lib/auth";
-import { pushToast } from "@/components/ToastStack";
 
 export default function MonitorLogin() {
   const router = useRouter();
+  const [done, setDone] = useState(false);
 
   const onLogin = async (password) => {
     const res = await fetch("/api/monitor/auth", {
@@ -18,8 +20,8 @@ export default function MonitorLogin() {
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || "Gagal masuk.");
     setAuthed("monitor");
-    pushToast({ title: "Berhasil masuk", body: "Memuat data realtime seluruh Sub ID..." });
-    router.push("/monitor/dashboard");
+    setDone(true);
+    setTimeout(() => router.push("/monitor/dashboard"), 900);
   };
 
   return (
@@ -30,6 +32,7 @@ export default function MonitorLogin() {
         subtitle=""
         onLogin={onLogin}
       />
+      {done && <LoginSuccess accent="amber" title="Login Berhasil" subtitle="Selamat datang di Realtime Monitor" />}
     </LoginLayout>
   );
 }

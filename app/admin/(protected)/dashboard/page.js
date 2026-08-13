@@ -32,7 +32,7 @@ export default function AdminDashboard() {
     );
   }
 
-  const { totals, chart, topPanels, panels, recent } = data;
+  const { totals, chart, topPanels, panels } = data;
   const lastPanels = [...panels]
     .sort((a, b) => new Date(b.last_login_at || 0) - new Date(a.last_login_at || 0))
     .slice(0, 5);
@@ -53,7 +53,7 @@ export default function AdminDashboard() {
         }
       />
 
-      <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
         <StatCard icon="users" label="Sub ID Aktif" value={`${totals.activePanels} / ${totals.panels}`} sub="Total member" tone="emerald" />
         <StatCard icon="link" label="Total Link" value={formatNumber(totals.links)} sub="All Sub ID" tone="sky" />
         <StatCard icon="chart" label="Total Click" value={formatNumber(totals.traffic)} sub="Gabungan semua link" tone="violet" />
@@ -85,8 +85,8 @@ export default function AdminDashboard() {
             Kelola semua →
           </Link>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+        <div className="cpa-table-wrap">
+          <table className="w-full text-sm cpa-table">
             <thead>
               <tr className="text-left text-xs text-muted uppercase tracking-wide border-b border-line">
                 <th className="px-5 py-3 font-semibold">Member</th>
@@ -117,46 +117,6 @@ export default function AdminDashboard() {
               {lastPanels.length === 0 && (
                 <tr>
                   <td colSpan={6} className="px-5 py-10 text-center text-muted">Belum ada member.</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <div className="bg-surface border border-line rounded-xl overflow-hidden">
-        <div className="px-5 py-4 border-b border-line flex items-center justify-between">
-          <h2 className="font-bold">Konversi Terbaru</h2>
-          <Link href="/monitor/dashboard" className="text-xs font-semibold text-emerald hover:underline">
-            Buka Monitor →
-          </Link>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-xs text-muted uppercase tracking-wide border-b border-line">
-                <th className="px-5 py-3 font-semibold">Member</th>
-                <th className="px-5 py-3 font-semibold">Sub ID</th>
-                <th className="px-5 py-3 font-semibold">Country</th>
-                <th className="px-5 py-3 font-semibold text-right">Earning</th>
-                <th className="px-5 py-3 font-semibold">Waktu</th>
-              </tr>
-            </thead>
-            <tbody>
-              {recent.map((c) => (
-                <tr key={c.id} className="border-b border-line/50 last:border-0 hover:bg-surface-2/50">
-                  <td className="px-5 py-3 font-semibold">{c.panel_name || <span className="text-muted">Unmatched</span>}</td>
-                  <td className="px-5 py-3 font-mono text-xs text-emerald">{c.sub_id || "—"}</td>
-                  <td className="px-5 py-3 font-mono text-xs">{c.country || "—"}</td>
-                  <td className="px-5 py-3 text-right tabular-nums text-emerald font-semibold">{formatCurrency(c.earning, "USD")}</td>
-                  <td className="px-5 py-3 text-muted text-xs">
-                    {new Date(c.created_at).toLocaleString("id-ID", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
-                  </td>
-                </tr>
-              ))}
-              {recent.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="px-5 py-10 text-center text-muted">Belum ada konversi.</td>
                 </tr>
               )}
             </tbody>

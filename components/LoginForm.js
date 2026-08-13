@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Icon } from "./icons";
+import PasswordInput from "./PasswordInput";
 
 const accents = {
   emerald: {
@@ -38,7 +39,6 @@ export default function LoginForm({
   footerLinks = [],
 }) {
   const [password, setPassword] = useState("");
-  const [show, setShow] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -75,24 +75,14 @@ export default function LoginForm({
             <label className="block text-xs font-semibold text-muted mb-1.5 uppercase tracking-wider">
               Password
             </label>
-            <div className="relative">
-              <input
-                type={show ? "text" : "password"}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                autoFocus
-                className={`w-full bg-navy/80 border border-line rounded-lg pl-3.5 pr-11 py-2.5 text-sm transition-all duration-200 placeholder:text-muted/40 focus:outline-none focus:ring-2 ${a.focus}`}
-              />
-              <button
-                type="button"
-                onClick={() => setShow(!show)}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-muted hover:text-foreground transition-colors"
-                aria-label={show ? "Sembunyikan password" : "Tampilkan password"}
-              >
-                <Icon name="eye" className="w-4.5 h-4.5" />
-              </button>
-            </div>
+            <PasswordInput
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
+              autoFocus
+              bgClass="bg-navy/80"
+              focusClass={`focus:ring-2 ${a.focus}`}
+            />
           </div>
 
           {error && (

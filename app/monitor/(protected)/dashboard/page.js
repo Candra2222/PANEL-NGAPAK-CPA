@@ -65,9 +65,7 @@ export default function MonitorDashboard() {
 }
 
 function ReportView() {
-  const { currency } = useContext(MonitorCtx);
-  const [from, setFrom] = useState(todayISO());
-  const [to, setTo] = useState(todayISO());
+  const { currency, reportFrom: from, setReportFrom: setFrom, reportTo: to, setReportTo: setTo } = useContext(MonitorCtx);
   const [range, setRange] = useState("today");
   const [data, setData] = useState(null);
 
@@ -147,7 +145,7 @@ function ReportView() {
         }
       />
 
-      <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
         <StatCard icon="chart" label="Total Click" value={formatNumber(total.clicks)} sub={formatRange(from, to)} tone="violet" />
         <StatCard icon="bolt" label="Conversion" value={formatNumber(total.conversions)} sub={`CR ${crOf(total.conversions, total.clicks)}%`} tone="emerald" />
         <StatCard icon="wallet" label="Payout" value={formatCurrency(total.earning, currency)} sub={`≈ ${formatCurrency(total.earning, currency === "USD" ? "IDR" : "USD")}`} tone="amber" />
@@ -184,8 +182,8 @@ function ReportTable({ data, currency }) {
     { clicks: 0, conversions: 0, earning: 0 }
   );
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm">
+    <div className="cpa-table-wrap">
+      <table className="w-full text-sm cpa-table">
         <thead>
           <tr className="text-left text-xs text-muted uppercase tracking-wide border-b border-line">
             <th className="px-5 py-3 font-semibold">No</th>
@@ -204,7 +202,7 @@ function ReportTable({ data, currency }) {
               <td className="px-5 py-3">
                 <span className="flex items-center gap-1.5">
                   <span className="font-mono text-xs text-emerald">{r.sub_id}</span>
-                  {i === 0 && <FaCrown className="w-3.5 h-3.5 text-amber-400 shrink-0" title="Earning tertinggi" />}
+                  {i === 0 && r.earning > 0 && <FaCrown className="w-3.5 h-3.5 text-amber-400 shrink-0" title="Earning tertinggi" />}
                 </span>
               </td>
               <td className="px-5 py-3 text-muted text-xs">{r.network_name}</td>
@@ -228,8 +226,7 @@ function ReportTable({ data, currency }) {
 }
 
 function RealtimeView() {
-  const { currency, setCurrency, refreshOverview } = useContext(MonitorCtx);
-  const [range, setRange] = useState("today");
+  const { currency, setCurrency, refreshOverview, range, setRange } = useContext(MonitorCtx);
   const [filterSubId, setFilterSubId] = useState("all");
   const [soundOn, setSoundOn] = useState(true);
   const [tab, setTab] = useState("realtime");
@@ -403,14 +400,28 @@ function RealtimeView() {
       .filter((c) => {
         const ts = new Date(c.created_at).getTime();
         return ts >= cutoff && ts < upper;
-      })
-      .slice(0, 200);
+      });
   }, [allConvs, range, filterSubId]);
 
   const liveCount = liveTraffic.length + liveConvs.length;
-  const liveEarning = liveConvs.reduce((s, c) => s + (Number(c.earning) || 0), 0);
-  const totalClicks = base.totals.clicks + liveCount;
-  const totalConversions = base.totals.conversions + liveConvs.length;
+
+  const liveInRange = useMemo(() => {
+    const cutoff = rangeCutoff(range);
+    const upper = range === "yesterday" ? startOfConversionDay() : Infinity;
+    const bySub = (x) => (filterSubId === "all" ? true : x.sub_id === filterSubId);
+    const inRange = (x) => {
+      const ts = new Date(x.created_at).getTime();
+      return ts >= cutoff && ts < upper;
+    };
+    return {
+      clicks: liveTraffic.filter(bySub).filter(inRange).length,
+      conversions: liveConvs.filter(bySub).filter(inRange),
+    };
+  }, [liveTraffic, liveConvs, range, filterSubId]);
+
+  const liveEarning = liveInRange.conversions.reduce((s, c) => s + (Number(c.earning) || 0), 0);
+  const totalClicks = base.totals.clicks + liveInRange.clicks;
+  const totalConversions = base.totals.conversions + liveInRange.conversions.length;
   const totalEarning = base.totals.earning + liveEarning;
 
   const feed = useMemo(() => {
@@ -473,7 +484,7 @@ function RealtimeView() {
         </div>
       </div>
 
-      <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
         <StatCard icon="chart" label="Total Click" value={formatNumber(totalClicks)} sub="All Click" tone="violet" />
         <StatCard icon="bolt" label="Conversion" value={formatNumber(totalConversions)} sub={`CTR ${ctr}%`} tone="emerald" />
         <StatCard icon="wallet" label="Earning" value={formatCurrency(totalEarning, currency)} sub={`≈ ${formatCurrency(totalEarning, currency === "USD" ? "IDR" : "USD")}`} tone="amber" />
@@ -496,9 +507,9 @@ function RealtimeView() {
           </button>
         </div>
 
-        <div className="overflow-x-auto max-h-[560px] overflow-y-auto" ref={feedRef}>
+        <div className="cpa-table-wrap" ref={feedRef}>
           {tab === "realtime" ? (
-            <table className="w-full text-sm">
+            <table className="w-full text-sm cpa-table">
               <thead className="sticky top-0 bg-surface">
                 <tr className="text-left text-xs text-muted uppercase tracking-wide border-b border-line">
                   <th className="px-5 py-3 font-semibold">No</th>
@@ -517,7 +528,7 @@ function RealtimeView() {
                     <td className="px-5 py-3">
                       {e.region || e.city ? (
                         <div>
-                          <div className="text-xs text-sky font-semibold">{e.region || e.city}</div>
+                          <div className="text-xs text-sky-400 font-semibold">{e.region || e.city}</div>
                           {e.region && e.city && <div className="text-[11px] text-muted">{e.city}</div>}
                           {e.postal_code && <div className="text-[11px] text-muted tabular-nums">{e.postal_code}</div>}
                         </div>
@@ -540,7 +551,7 @@ function RealtimeView() {
               </tbody>
             </table>
           ) : (
-            <table className="w-full text-sm">
+            <table className="w-full text-sm cpa-table">
               <thead className="sticky top-0 bg-surface">
                 <tr className="text-left text-xs text-muted uppercase tracking-wide border-b border-line">
                   <th className="px-5 py-3 font-semibold">No</th>

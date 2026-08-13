@@ -3,11 +3,11 @@
 import { useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Shell from "@/components/Shell";
-import ToastStack from "@/components/ToastStack";
 import { MonitorCtx } from "./monitor-context";
 import { CountryFlag } from "@/components/BrandLogo";
 import { isAuthed } from "@/lib/auth";
 import { formatCurrency, formatNumber } from "@/lib/mock-data";
+import { todayISO } from "@/lib/conversion-day";
 
 const nav = [];
 
@@ -116,15 +116,30 @@ export default function MonitorLayout({ children }) {
   const [currency, setCurrency] = useState("USD");
   const [view, setView] = useState("realtime");
   const [overview, setOverview] = useState(null);
+  const [range, setRange] = useState("today");
+  const [reportFrom, setReportFrom] = useState(todayISO());
+  const [reportTo, setReportTo] = useState(todayISO());
+
+  const overviewParams = useCallback(() => {
+    const params = new URLSearchParams();
+    if (view === "report") {
+      params.set("range", "custom");
+      params.set("from", reportFrom);
+      params.set("to", reportTo);
+    } else {
+      params.set("range", range);
+    }
+    return params;
+  }, [view, range, reportFrom, reportTo]);
 
   const refreshOverview = useCallback(async () => {
     try {
-      const res = await fetch("/api/monitor/stats?range=today");
+      const res = await fetch(`/api/monitor/stats?${overviewParams()}`);
       if (!res.ok) return;
       const data = await res.json();
       setOverview(data);
     } catch {}
-  }, []);
+  }, [overviewParams]);
 
   useEffect(() => {
     if (!isAuthed("monitor")) {
@@ -134,7 +149,7 @@ export default function MonitorLayout({ children }) {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch("/api/monitor/stats?range=today");
+        const res = await fetch(`/api/monitor/stats?${overviewParams()}`);
         if (!res.ok) return;
         const data = await res.json();
         if (!cancelled) setOverview(data);
@@ -143,12 +158,12 @@ export default function MonitorLayout({ children }) {
     return () => {
       cancelled = true;
     };
-  }, [router]);
+  }, [router, overviewParams]);
 
-  const totalEarning = overview?.allEarning ?? overview?.totals?.earning ?? 0;
+  const totalEarning = overview?.totals?.earning ?? 0;
 
   return (
-    <MonitorCtx.Provider value={{ currency, setCurrency, view, setView, overview, refreshOverview }}>
+    <MonitorCtx.Provider value={{ currency, setCurrency, view, setView, overview, refreshOverview, range, setRange, reportFrom, setReportFrom, reportTo, setReportTo }}>
       <Shell
         brand="CPA Link Panel"
         sub="Realtime Monitor"
@@ -160,7 +175,6 @@ export default function MonitorLayout({ children }) {
         headerTitle="Realtime Monitor"
         headerStat={{ label: "Total Earning", value: formatCurrency(totalEarning, currency) }}
       >
-        <ToastStack />
         {children}
       </Shell>
     </MonitorCtx.Provider>

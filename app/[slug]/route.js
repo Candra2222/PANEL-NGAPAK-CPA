@@ -3,7 +3,7 @@ import { after } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 const BOT_RE =
-  /(bot|crawler|spider|preview|facebookexternalhit|facebookcatalog|meta-externalagent|googlebot|bingbot|slurp|duckduckbot|baiduspider|yandex|sogou|exabot|facebot|ia_archiver|twitterbot|whatsapp|telegrambot|discordbot|slackbot|skypeuripreview|pinterest|pinterestbot|tumblr|linkedinbot|vkshare|applebot|bytespider|semrushbot|ahrefsbot|google-inspectiontool|tiktok|instagram|threads|redditbot|outbrain|pocket|embeds)/i;
+  /(bot|crawler|spider|preview|facebookexternalhit|facebookcatalog|meta-externalagent|googlebot|bingbot|slurp|duckduckbot|baiduspider|yandex|sogou|exabot|facebot|ia_archiver|twitterbot|whatsapp|telegrambot|discordbot|slackbot|skypeuripreview|pinterest|pinterestbot|tumblr|linkedinbot|vkshare|applebot|bytespider|semrushbot|ahrefsbot|google-inspectiontool|tiktok|redditbot|outbrain|pocket|embeds)/i;
 
 // Unambiguous social crawler user agents — mereka DIPAKSA untuk tidak
 // mengikuti redirect (tanpa meta refresh) agar preview OG ter-scrape

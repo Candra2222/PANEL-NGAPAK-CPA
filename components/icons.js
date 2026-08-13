@@ -42,6 +42,12 @@ export function Icon({ name, className = "w-5 h-5" }) {
         <path d="m10.7 12.3 8-8M16 7l2.5 2.5M18.5 4.5 21 7" />
       </>
     ),
+    lock: (
+      <>
+        <rect x="4" y="11" width="16" height="10" rx="2" />
+        <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+      </>
+    ),
     shield: (
       <>
         <path d="M12 3 4.5 6v5c0 4.5 3 8.3 7.5 9.7 4.5-1.4 7.5-5.2 7.5-9.7V6L12 3Z" />
@@ -75,6 +81,13 @@ export function Icon({ name, className = "w-5 h-5" }) {
       <>
         <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" />
         <circle cx="12" cy="12" r="3" />
+      </>
+    ),
+    "eye-off": (
+      <>
+        <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" />
+        <path d="M10.6 10.6a3 3 0 0 0 4.2 4.2M14.7 9.3A3 3 0 0 0 9.3 14.7" />
+        <path d="m3 3 18 18" />
       </>
     ),
     check: <path d="m5 13 4 4L19 7" />,

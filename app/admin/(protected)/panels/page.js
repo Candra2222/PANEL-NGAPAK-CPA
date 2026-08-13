@@ -204,8 +204,8 @@ export default function AdminPanels() {
             />
           </div>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+        <div className="cpa-table-wrap">
+          <table className="w-full text-sm cpa-table">
             <thead>
               <tr className="text-left text-xs text-muted uppercase tracking-wide border-b border-line">
                 <th className="px-5 py-3 font-semibold">Member</th>
@@ -473,7 +473,7 @@ function Modal({ title, onClose, children }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/70" onClick={onClose} />
-      <div className="relative w-full max-w-md bg-surface border border-line rounded-2xl p-6 animate-toast-in">
+      <div className="relative w-full max-w-md bg-surface border border-line rounded-2xl p-6 animate-toast-in max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-5">
           <h3 className="font-bold text-lg">{title}</h3>
           <button onClick={onClose} className="text-muted hover:text-foreground" aria-label="Tutup">

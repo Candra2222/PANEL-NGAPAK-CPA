@@ -3,6 +3,7 @@
 import { useState } from "react";
 import PageHeader from "@/components/PageHeader";
 import { Icon } from "@/components/icons";
+import PasswordInput from "@/components/PasswordInput";
 import { pushToast } from "@/components/ToastStack";
 
 export default function ChangePassword() {
@@ -51,13 +52,13 @@ export default function ChangePassword() {
         )}
         <form onSubmit={submit} className="space-y-4">
           <Field label="Password Lama">
-            <input type="password" value={form.old} onChange={(e) => setForm({ ...form, old: e.target.value })} className={inputCls} autoFocus />
+            <PasswordInput value={form.old} onChange={(e) => setForm({ ...form, old: e.target.value })} autoFocus />
           </Field>
           <Field label="Password Baru">
-            <input type="password" value={form.next} onChange={(e) => setForm({ ...form, next: e.target.value })} className={inputCls} placeholder="Minimal 3 karakter" />
+            <PasswordInput value={form.next} onChange={(e) => setForm({ ...form, next: e.target.value })} placeholder="Minimal 3 karakter" />
           </Field>
           <Field label="Konfirmasi Password Baru">
-            <input type="password" value={form.confirm} onChange={(e) => setForm({ ...form, confirm: e.target.value })} className={inputCls} />
+            <PasswordInput value={form.confirm} onChange={(e) => setForm({ ...form, confirm: e.target.value })} />
           </Field>
           <button
             type="submit"
@@ -71,9 +72,6 @@ export default function ChangePassword() {
     </div>
   );
 }
-
-const inputCls =
-  "w-full bg-navy border border-line rounded-lg px-3.5 py-2.5 text-sm focus:outline-none focus:border-emerald/60 focus:ring-2 focus:ring-emerald/20";
 
 function Field({ label, children }) {
   return (

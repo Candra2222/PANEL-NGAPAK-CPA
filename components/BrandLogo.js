@@ -49,13 +49,32 @@ const APP_ICONS = {
 };
 
 const BROWSER_ICONS = {
-  Chrome: { Icon: FaChrome, color: "#ea4335" },
+  Chrome: { Icon: ChromeBrand },
   Safari: { Icon: FaSafari, color: "#00b2ff" },
   Edge: { Icon: FaEdge, color: "#0078d4" },
   Firefox: { Icon: FaFirefoxBrowser, color: "#ff7139" },
   Opera: { Icon: FaOpera, color: "#ff1b2d" },
   "Samsung Internet": { Icon: FaChrome, color: "#1428a0" },
 };
+
+function ChromeBrand({ size = 16, title }) {
+  return (
+    <svg
+      viewBox="8 8 176 176.01"
+      width={size}
+      height={size}
+      style={{ borderRadius: "50%", overflow: "hidden" }}
+      aria-label={title}
+      role="img"
+    >
+      <path d="M21.97 8v108h39.39L96 56h88V8z" fill="#db4437" />
+      <path d="M8 184h83.77l38.88-38.88V116H61.36L8 24.48z" fill="#0f9d58" />
+      <path d="M96 56l34.65 60-38.88 68H184V56z" fill="#ffcd40" />
+      <circle cx="96" cy="96" r="40" fill="#f1f1f1" />
+      <circle cx="96" cy="96" r="32" fill="#4285f4" />
+    </svg>
+  );
+}
 
 export function DeviceLogo({ device, size = 16 }) {
   const meta = DEVICE_ICONS[device] || { Icon: FaAndroid, color: "#3ddc84" };
@@ -70,7 +89,7 @@ export function AppLogo({ app, size = 16 }) {
 }
 
 export function BrowserLogo({ browser, size = 16 }) {
-  const meta = BROWSER_ICONS[browser] || { Icon: FaChrome, color: "#ea4335" };
+  const meta = BROWSER_ICONS[browser] || { Icon: ChromeBrand };
   const Icon = meta.Icon;
   return <Icon size={size} color={meta.color} title={browser} />;
 }

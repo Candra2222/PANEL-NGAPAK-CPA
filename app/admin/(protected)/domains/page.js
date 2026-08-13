@@ -17,6 +17,7 @@ export default function AdminDomains() {
   const [showAdd, setShowAdd] = useState(false);
   const [setupFor, setSetupFor] = useState(null);
   const [verifying, setVerifying] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
 
   const [addForm, setAddForm] = useState({
     name: "",
@@ -85,6 +86,14 @@ export default function AdminDomains() {
     }, 2000);
   };
 
+  const deleteDomain = () => {
+    if (!deleteTarget) return;
+    setDomains((prev) => prev.filter((d) => d.id !== deleteTarget.id));
+    if (setupFor === deleteTarget.id) setSetupFor(null);
+    setDeleteTarget(null);
+    pushToast({ title: "Domain dihapus", body: deleteTarget.name, tone: "red" });
+  };
+
   const setupDomain = domains.find((d) => d.id === setupFor);
 
   return (
@@ -114,8 +123,8 @@ export default function AdminDomains() {
           <h2 className="font-bold">Daftar Domain Redirect</h2>
           <p className="text-xs text-muted mt-0.5">Dikelola di Cloudflare — member memilih domain ini saat generate link.</p>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+        <div className="cpa-table-wrap">
+          <table className="w-full text-sm cpa-table">
             <thead>
               <tr className="text-left text-xs text-muted uppercase tracking-wide border-b border-line">
                 <th className="px-5 py-3 font-semibold">Domain</th>
@@ -173,6 +182,13 @@ export default function AdminDomains() {
                         title={d.is_active ? "Nonaktifkan" : "Aktifkan"}
                       >
                         <Icon name="shield" className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => setDeleteTarget(d)}
+                        className="p-2 rounded-lg text-muted hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                        title="Hapus domain"
+                      >
+                        <Icon name="trash" className="w-4 h-4" />
                       </button>
                     </div>
                   </td>
@@ -326,6 +342,22 @@ export default function AdminDomains() {
             <p className="text-xs text-muted/70 leading-relaxed">
               Catatan: integrasi API Cloudflare akan menyatu dengan backend. Preview ini menampilkan record yang harus dibuat manual di dashboard Cloudflare.
             </p>
+          </div>
+        </Modal>
+      )}
+
+      {deleteTarget && (
+        <Modal title="Hapus Domain" onClose={() => setDeleteTarget(null)}>
+          <div className="bg-red-500/10 border border-red-500/30 rounded-lg px-3.5 py-3 text-sm text-red-300 mb-5">
+            Kamu akan menghapus domain <span className="font-mono font-semibold text-red-200">{deleteTarget.name}</span>. Domain yang masih dipakai member untuk generate link akan berhenti berfungsi. Yakin mau lanjut?
+          </div>
+          <div className="flex gap-2">
+            <button onClick={() => setDeleteTarget(null)} className="flex-1 py-2.5 rounded-lg border border-line text-sm font-semibold text-muted hover:text-foreground transition-colors">
+              Batal
+            </button>
+            <button onClick={deleteDomain} className="flex-1 py-2.5 rounded-lg bg-red-500 text-white text-sm font-bold hover:bg-red-600 transition-colors">
+              Hapus Domain
+            </button>
           </div>
         </Modal>
       )}

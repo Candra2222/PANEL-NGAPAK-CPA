@@ -65,7 +65,7 @@ export default function LoginLayout({ accent = "emerald", brand, badge, children
         {children}
       </div>
 
-      <p className="relative mt-10 text-xs text-muted/60">CPA Link Panel System — Frontend Preview (Mock Data)</p>
+      <p className="relative mt-10 text-xs text-muted/60">CPA Link Panel System — <span className="text-muted/90 font-bold tracking-[0.22em]">POWERED BY SESEPUH</span></p>
     </div>
   );
 }

@@ -51,11 +51,11 @@ export default function ToastStack() {
   }, []);
 
   return (
-    <div className="fixed top-4 right-4 z-[100] flex flex-col gap-2 w-[min(92vw,360px)]">
+    <div className="pointer-events-none fixed top-4 left-4 right-4 sm:left-auto sm:right-4 z-[100] flex flex-col gap-2 sm:w-[360px]">
       {toasts.map((t) => (
         <div
           key={t.id}
-          className={`animate-toast-in bg-surface border rounded-xl p-4 shadow-xl shadow-black/40 ${toneStyles[t.tone]}`}
+          className={`pointer-events-auto animate-toast-in bg-surface border rounded-xl p-4 shadow-xl shadow-black/40 ${toneStyles[t.tone]}`}
         >
           <div className="flex items-start gap-3">
             <Icon name="bolt" className={`w-5 h-5 mt-0.5 ${toneText[t.tone]}`} />

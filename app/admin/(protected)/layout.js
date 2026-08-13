@@ -3,7 +3,6 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Shell from "@/components/Shell";
-import ToastStack from "@/components/ToastStack";
 import { checkSession } from "@/lib/auth";
 
 const nav = [
@@ -37,7 +36,6 @@ export default function AdminLayout({ children }) {
       nav={nav}
       showClock
     >
-      <ToastStack />
       {children}
     </Shell>
   );

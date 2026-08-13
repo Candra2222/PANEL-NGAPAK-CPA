@@ -7,6 +7,7 @@ import Badge from "@/components/Badge";
 import StatCard from "@/components/StatCard";
 import CopyButton from "@/components/CopyButton";
 import { Icon } from "@/components/icons";
+import PasswordInput from "@/components/PasswordInput";
 import { pushToast } from "@/components/ToastStack";
 import { formatNumber, formatCurrency, fullLink, timeAgo } from "@/lib/mock-data";
 
@@ -127,7 +128,7 @@ export default function PanelDetail() {
         }
       />
 
-      <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
         <StatCard icon="link" label="Jumlah Link" value={formatNumber(redirects.length)} tone="sky" />
         <StatCard icon="chart" label="Total Click" value={formatNumber(clicks)} tone="violet" />
         <StatCard icon="bolt" label="Conversion" value={formatNumber(conversions.length)} tone="emerald" />
@@ -166,8 +167,8 @@ export default function PanelDetail() {
             <h2 className="font-bold">Daftar Link</h2>
             <span className="text-xs text-muted">{redirects.length} link</span>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+          <div className="cpa-table-wrap">
+            <table className="w-full text-sm cpa-table">
               <thead>
                 <tr className="text-left text-xs text-muted uppercase tracking-wide border-b border-line">
                   <th className="px-5 py-3 font-semibold">Nama Link</th>
@@ -223,11 +224,10 @@ export default function PanelDetail() {
             Tulis password baru untuk <span className="font-mono text-emerald font-semibold">{panel.sub_id}</span> — ditulis manual oleh admin, tanpa kode acak.
           </p>
           <form onSubmit={submitReset} className="space-y-4">
-            <input
+            <PasswordInput
               value={resetPw}
               onChange={(e) => setResetPw(e.target.value)}
               placeholder="Tulis password baru..."
-              className="w-full bg-navy border border-line rounded-lg px-3.5 py-2.5 text-sm focus:outline-none focus:border-emerald/60 focus:ring-2 focus:ring-emerald/20"
               autoFocus
             />
             <div className="flex gap-2">
@@ -275,7 +275,7 @@ function Modal({ title, onClose, children }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/70" onClick={onClose} />
-      <div className="relative w-full max-w-sm bg-surface border border-line rounded-2xl p-6 animate-toast-in">
+      <div className="relative w-full max-w-sm bg-surface border border-line rounded-2xl p-6 animate-toast-in max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-bold text-lg">{title}</h3>
           <button onClick={onClose} className="text-muted hover:text-foreground" aria-label="Tutup">

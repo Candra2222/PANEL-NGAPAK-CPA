@@ -196,7 +196,7 @@ export default function PanelDashboard() {
         </div>
       </div>
 
-      <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
         <StatCard icon="link" label="Total Link" value={formatNumber(stats.links)} tone="sky" />
         <StatCard icon="chart" label="Total Click" value={formatNumber(stats.clicks)} tone="violet" />
         <StatCard icon="bolt" label="Conversion" value={formatNumber(stats.conversions)} tone="emerald" />
@@ -322,8 +322,8 @@ export default function PanelDashboard() {
               <span className="text-xs text-muted">{loading ? "Memuat..." : `${links.length} link`}</span>
             </div>
           </div>
-          <div className="overflow-x-auto max-h-[560px] overflow-y-auto">
-            <table className="w-full text-sm">
+          <div className="cpa-table-wrap">
+            <table className="w-full text-sm cpa-table">
               <thead className="sticky top-0 bg-surface">
                 <tr className="text-left text-xs text-muted uppercase tracking-wide border-b border-line">
                   <th className="px-5 py-3 font-semibold">Nama</th>
@@ -378,7 +378,7 @@ export default function PanelDashboard() {
       {ogPrompt && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/70" onClick={() => setOgPrompt(false)} />
-          <div className="relative w-full max-w-md bg-surface border border-line rounded-2xl p-6 animate-toast-in">
+          <div className="relative w-full max-w-md bg-surface border border-line rounded-2xl p-6 animate-toast-in max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-bold text-lg">OG Meta Belum Diisi</h3>
               <button onClick={() => setOgPrompt(false)} className="text-muted hover:text-foreground" aria-label="Tutup">
@@ -398,7 +398,7 @@ export default function PanelDashboard() {
       {deleteOneTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/70" onClick={() => setDeleteOneTarget(null)} />
-          <div className="relative w-full max-w-md bg-surface border border-line rounded-2xl p-6 animate-toast-in">
+          <div className="relative w-full max-w-md bg-surface border border-line rounded-2xl p-6 animate-toast-in max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-bold text-lg">Hapus Link</h3>
               <button onClick={() => setDeleteOneTarget(null)} className="text-muted hover:text-foreground" aria-label="Tutup">
@@ -423,7 +423,7 @@ export default function PanelDashboard() {
       {deleteAllPrompt && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/70" onClick={() => setDeleteAllPrompt(false)} />
-          <div className="relative w-full max-w-md bg-surface border border-line rounded-2xl p-6 animate-toast-in">
+          <div className="relative w-full max-w-md bg-surface border border-line rounded-2xl p-6 animate-toast-in max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-bold text-lg">Hapus Semua Link</h3>
               <button onClick={() => setDeleteAllPrompt(false)} className="text-muted hover:text-foreground" aria-label="Tutup">
@@ -448,7 +448,7 @@ export default function PanelDashboard() {
       {preview && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/70" onClick={() => setPreview(null)} />
-          <div className="relative w-full max-w-md bg-surface border border-line rounded-2xl p-6 animate-toast-in">
+          <div className="relative w-full max-w-md bg-surface border border-line rounded-2xl p-6 animate-toast-in max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-5">
               <h3 className="font-bold text-lg">Link Siap Dipakai</h3>
               <button onClick={() => setPreview(null)} className="text-muted hover:text-foreground" aria-label="Tutup">
