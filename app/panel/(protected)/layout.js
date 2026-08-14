@@ -23,15 +23,15 @@ export default function PanelLayout({ children }) {
     };
   }, [router]);
 
-  const data = getAuthedData("panel") || { panel_name: "Member", sub_id: "—" };
-  const initials = (data.panel_name || "??").split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
+  const data = getAuthedData("panel") || { sub_id: "Member" };
+  const initials = (data.sub_id || "??").split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
 
   return (
     <Shell
       brand="CPA Link Panel"
       sub="Generate Link & Bulk"
       panelKey="panel"
-      user={{ name: data.panel_name || "Member", initials }}
+      user={{ name: data.sub_id || "Member", initials }}
       nav={nav}
       showClock
     >

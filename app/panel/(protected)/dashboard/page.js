@@ -3,19 +3,17 @@
 import { useEffect, useMemo, useState } from "react";
 import PageHeader from "@/components/PageHeader";
 import Badge from "@/components/Badge";
-import StatCard from "@/components/StatCard";
 import CopyButton from "@/components/CopyButton";
 import { Icon } from "@/components/icons";
 import { pushToast } from "@/components/ToastStack";
 import { getAuthedData } from "@/lib/auth";
-import { formatNumber, formatCurrency, fullLink } from "@/lib/mock-data";
+import { formatNumber, fullLink } from "@/lib/mock-data";
 
 export default function PanelDashboard() {
-  const session = getAuthedData("panel") || { sub_id: "—", panel_name: "Member", smartlink_url: "", domains: [] };
+  const session = getAuthedData("panel") || { sub_id: "—", smartlink_url: "", domains: [] };
   const [links, setLinks] = useState([]);
-  const [stats, setStats] = useState({ links: 0, clicks: 0, conversions: 0, earning: 0 });
   const [smartlink, setSmartlink] = useState(session.smartlink_url || "");
-  const [panelName, setPanelName] = useState(session.panel_name);
+  const [panelName, setPanelName] = useState(session.sub_id);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
 
@@ -49,9 +47,8 @@ export default function PanelDashboard() {
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error("Gagal memuat data."))))
       .then((d) => {
         setLinks(d.redirects || []);
-        setStats(d.stats || { links: 0, clicks: 0, conversions: 0, earning: 0 });
         setSmartlink(d.panel?.smartlink_url || smartlink);
-        setPanelName(d.panel?.panel_name || panelName);
+        setPanelName(d.panel?.sub_id || panelName);
       })
       .catch((e) => pushToast({ title: "Gagal memuat data", body: e.message, tone: "red" }))
       .finally(() => setLoading(false));
@@ -88,7 +85,6 @@ export default function PanelDashboard() {
       });
       const link = data.redirects[0];
       setLinks((prev) => [link, ...prev]);
-      setStats((s) => ({ ...s, links: s.links + 1 }));
       setPreview(link);
       pushToast({ title: "Link berhasil dibuat", body: fullLink(link.slug, link.domain || defaultDomain) });
       setSingle({ ...single, slug: "" });
@@ -130,7 +126,6 @@ export default function PanelDashboard() {
       });
       const created = data.redirects || [];
       setLinks((prev) => [...created, ...prev]);
-      setStats((s) => ({ ...s, links: s.links + created.length }));
       pushToast({ title: `${created.length} link berhasil dibuat`, body: "Sub ID & Smartlink otomatis tertanam." });
     } catch (err) {
       pushToast({ title: "Gagal membuat", body: err.message, tone: "red" });
@@ -150,7 +145,6 @@ export default function PanelDashboard() {
     try {
       await api(`/api/panel/redirects/${l.id}`, { method: "DELETE" });
       setLinks((prev) => prev.filter((x) => x.id !== l.id));
-      setStats((s) => ({ ...s, links: s.links - 1 }));
       setDeleteOneTarget(null);
       pushToast({ title: "Link dihapus", body: fullLink(l.slug, l.domain || defaultDomain), tone: "red" });
     } catch (err) {
@@ -165,7 +159,6 @@ export default function PanelDashboard() {
     try {
       await api("/api/panel/redirects", { method: "DELETE" });
       setLinks([]);
-      setStats((s) => ({ ...s, links: 0 }));
       setDeleteAllPrompt(false);
       pushToast({ title: "Semua link dihapus", body: "Daftar link kamu sekarang kosong.", tone: "red" });
     } catch (err) {
@@ -194,13 +187,6 @@ export default function PanelDashboard() {
         <div>
           Sub ID <span className="font-mono font-bold">{subId}</span> full Access fitur. Setiap link sudah mengarah ke Smartlink.
         </div>
-      </div>
-
-      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
-        <StatCard icon="link" label="Total Link" value={formatNumber(stats.links)} tone="sky" />
-        <StatCard icon="chart" label="Total Click" value={formatNumber(stats.clicks)} tone="violet" />
-        <StatCard icon="bolt" label="Conversion" value={formatNumber(stats.conversions)} tone="emerald" />
-        <StatCard icon="wallet" label="Earning" value={formatCurrency(stats.earning, "USD")} sub={`≈ ${formatCurrency(stats.earning, "IDR")}`} tone="amber" />
       </div>
 
       <div className="grid lg:grid-cols-5 gap-4 mb-6">

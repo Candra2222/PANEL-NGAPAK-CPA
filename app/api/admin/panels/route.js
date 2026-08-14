@@ -64,10 +64,9 @@ export async function POST(request) {
 
   const body = await request.json().catch(() => ({}));
   const smartlinkUrl = typeof body.smartlink_url === "string" ? body.smartlink_url.trim() : "";
-  const panelName = typeof body.panel_name === "string" ? body.panel_name.trim() : "";
   const manualPassword = typeof body.password === "string" ? body.password.trim() : "";
 
-  if (!smartlinkUrl || !panelName) return error("URL Smartlink dan nama member wajib diisi.", 400);
+  if (!smartlinkUrl) return error("URL Smartlink wajib diisi.", 400);
   if (!isValidUrl(smartlinkUrl)) return error("URL Smartlink tidak valid.", 400);
 
   const params = detectSubIdParams(smartlinkUrl);
@@ -96,7 +95,7 @@ export async function POST(request) {
     .from("panels")
     .insert({
       sub_id: subId,
-      panel_name: panelName,
+      panel_name: subId,
       smartlink_url: smartlinkUrl,
       password_hash: await hashPassword(password),
       is_active: true,

@@ -102,8 +102,8 @@ export default function PanelDetail() {
   return (
     <div>
       <PageHeader
-        title={panel.panel_name}
-        desc={<span className="font-mono text-emerald">{panel.sub_id}</span>}
+        title={panel.sub_id}
+        desc={panel.panel_name && panel.panel_name !== panel.sub_id ? panel.panel_name : "Detail Sub ID"}
         actions={
           <>
             <Badge tone={panel.is_active ? "green" : "red"} dot>{panel.is_active ? "Aktif" : "Nonaktif"}</Badge>
@@ -137,7 +137,7 @@ export default function PanelDetail() {
 
       <div className="grid lg:grid-cols-3 gap-4 mb-6">
         <div className="bg-surface border border-line rounded-xl p-5">
-          <h2 className="text-xs font-bold text-muted uppercase tracking-wide mb-4">Info Member</h2>
+          <h2 className="text-xs font-bold text-muted uppercase tracking-wide mb-4">Info Sub ID</h2>
           <dl className="space-y-3 text-sm">
             <div className="flex justify-between gap-3">
               <dt className="text-muted">Sub ID</dt>

@@ -6,13 +6,13 @@ import Shell from "@/components/Shell";
 import { MonitorCtx } from "./monitor-context";
 import { CountryFlag } from "@/components/BrandLogo";
 import { isAuthed } from "@/lib/auth";
-import { formatCurrency, formatNumber } from "@/lib/mock-data";
+import { formatCurrency, formatNumber, USD_TO_IDR } from "@/lib/mock-data";
 import { todayISO } from "@/lib/conversion-day";
 
 const nav = [];
 
 function PerformanceCard({ currency }) {
-  const { overview } = useContext(MonitorCtx);
+  const { overview, idrRate } = useContext(MonitorCtx);
   const top = overview?.topToday || [];
 
   if (top.length === 0) {
@@ -40,7 +40,7 @@ function PerformanceCard({ currency }) {
               <div className="h-full bg-emerald rounded-full" style={{ width: `${(t.earning / maxEarning) * 100}%` }} />
             </div>
             <span className="w-[62px] text-right text-[10px] font-semibold tabular-nums text-muted">
-              {formatCurrency(t.earning, currency)}
+              {formatCurrency(t.earning, currency, idrRate)}
             </span>
           </div>
         ))}
@@ -114,6 +114,7 @@ function SidebarWidgets({ currency }) {
 export default function MonitorLayout({ children }) {
   const router = useRouter();
   const [currency, setCurrency] = useState("USD");
+  const [idrRate, setIdrRate] = useState(USD_TO_IDR);
   const [view, setView] = useState("realtime");
   const [overview, setOverview] = useState(null);
   const [range, setRange] = useState("today");
@@ -163,7 +164,7 @@ export default function MonitorLayout({ children }) {
   const totalEarning = overview?.totals?.earning ?? 0;
 
   return (
-    <MonitorCtx.Provider value={{ currency, setCurrency, view, setView, overview, refreshOverview, range, setRange, reportFrom, setReportFrom, reportTo, setReportTo }}>
+    <MonitorCtx.Provider value={{ currency, setCurrency, idrRate, setIdrRate, view, setView, overview, refreshOverview, range, setRange, reportFrom, setReportFrom, reportTo, setReportTo }}>
       <Shell
         brand="CPA Link Panel"
         sub="Realtime Monitor"
@@ -173,7 +174,7 @@ export default function MonitorLayout({ children }) {
         sidebar={<SidebarWidgets currency={currency} />}
         showClock
         headerTitle="Realtime Monitor"
-        headerStat={{ label: "Total Earning", value: formatCurrency(totalEarning, currency) }}
+        headerStat={{ label: "Total Earning", value: formatCurrency(totalEarning, currency, idrRate) }}
       >
         {children}
       </Shell>

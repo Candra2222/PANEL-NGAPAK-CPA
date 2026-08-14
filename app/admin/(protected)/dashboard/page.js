@@ -80,7 +80,7 @@ export default function AdminDashboard() {
 
       <div className="bg-surface border border-line rounded-xl overflow-hidden mb-6">
         <div className="px-5 py-4 border-b border-line flex items-center justify-between">
-          <h2 className="font-bold">Aktivitas Terakhir Member</h2>
+          <h2 className="font-bold">Aktivitas Terakhir Sub ID</h2>
           <Link href="/admin/panels" className="text-xs font-semibold text-emerald hover:underline">
             Kelola semua →
           </Link>
@@ -89,7 +89,6 @@ export default function AdminDashboard() {
           <table className="w-full text-sm cpa-table">
             <thead>
               <tr className="text-left text-xs text-muted uppercase tracking-wide border-b border-line">
-                <th className="px-5 py-3 font-semibold">Member</th>
                 <th className="px-5 py-3 font-semibold">Sub ID</th>
                 <th className="px-5 py-3 font-semibold">Status</th>
                 <th className="px-5 py-3 font-semibold">Last Login</th>
@@ -100,8 +99,7 @@ export default function AdminDashboard() {
             <tbody>
               {lastPanels.map((p) => (
                 <tr key={p.id} className="border-b border-line/50 last:border-0 hover:bg-surface-2/50">
-                  <td className="px-5 py-3 font-semibold">{p.panel_name}</td>
-                  <td className="px-5 py-3 font-mono text-xs text-emerald">{p.sub_id}</td>
+                  <td className="px-5 py-3 font-mono text-xs text-emerald font-semibold">{p.sub_id}</td>
                   <td className="px-5 py-3">
                     <Badge tone={p.is_active ? "green" : "red"} dot>{p.is_active ? "Aktif" : "Nonaktif"}</Badge>
                   </td>
@@ -116,7 +114,7 @@ export default function AdminDashboard() {
               ))}
               {lastPanels.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-5 py-10 text-center text-muted">Belum ada member.</td>
+                  <td colSpan={5} className="px-5 py-10 text-center text-muted">Belum ada member.</td>
                 </tr>
               )}
             </tbody>

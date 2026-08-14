@@ -5,6 +5,8 @@ import { createContext } from "react";
 export const MonitorCtx = createContext({
   currency: "USD",
   setCurrency: () => {},
+  idrRate: 16000,
+  setIdrRate: () => {},
   view: "realtime",
   setView: () => {},
   overview: null,

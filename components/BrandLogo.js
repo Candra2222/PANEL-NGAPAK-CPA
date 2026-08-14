@@ -57,6 +57,10 @@ const BROWSER_ICONS = {
   "Samsung Internet": { Icon: FaChrome, color: "#1428a0" },
 };
 
+const NETWORK_LOGOS = {
+  Trafee: "https://dnkjankypdusganpuezi.supabase.co/storage/v1/object/public/NETWORK/download.png",
+};
+
 function ChromeBrand({ size = 16, title }) {
   return (
     <svg
@@ -92,6 +96,12 @@ export function BrowserLogo({ browser, size = 16 }) {
   const meta = BROWSER_ICONS[browser] || { Icon: ChromeBrand };
   const Icon = meta.Icon;
   return <Icon size={size} color={meta.color} title={browser} />;
+}
+
+export function NetworkLogo({ network, size = 16 }) {
+  const src = NETWORK_LOGOS[network];
+  if (!src) return <span className="text-muted text-xs">{network}</span>;
+  return <img src={src} width={size} height={size} alt={network} title={network} style={{ objectFit: "contain" }} />;
 }
 
 export function flagEmoji(country) {

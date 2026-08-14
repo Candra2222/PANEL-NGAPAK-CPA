@@ -24,7 +24,6 @@ export default function AdminPanels() {
   const [form, setForm] = useState({
     smartlink_url: "",
     param_key: "",
-    panel_name: "",
     password: "",
     auto: true,
   });
@@ -47,9 +46,7 @@ export default function AdminPanels() {
 
   const filtered = useMemo(() => {
     const q = query.toLowerCase();
-    return panels.filter(
-      (p) => p.sub_id.toLowerCase().includes(q) || p.panel_name.toLowerCase().includes(q)
-    );
+    return panels.filter((p) => p.sub_id.toLowerCase().includes(q));
   }, [panels, query]);
 
   const api = async (url, options = {}) => {
@@ -61,8 +58,8 @@ export default function AdminPanels() {
 
   const create = async (e) => {
     e.preventDefault();
-    if (!form.smartlink_url.trim() || !form.panel_name.trim()) {
-      pushToast({ title: "Lengkapi form", body: "URL Smartlink dan nama member wajib diisi.", tone: "red" });
+    if (!form.smartlink_url.trim()) {
+      pushToast({ title: "Lengkapi form", body: "URL Smartlink wajib diisi.", tone: "red" });
       return;
     }
     if (!isValidUrl(form.smartlink_url)) {
@@ -88,14 +85,13 @@ export default function AdminPanels() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           smartlink_url: form.smartlink_url.trim(),
-          panel_name: form.panel_name.trim(),
           password: form.auto ? "" : form.password,
         }),
       });
       setPanels((prev) => [data.panel, ...prev]);
       setCreated({ ...data.panel, password: data.password });
       setShowModal(false);
-      setForm({ smartlink_url: "", param_key: "", panel_name: "", password: "", auto: true });
+      setForm({ smartlink_url: "", param_key: "", password: "", auto: true });
       pushToast({ title: "Sub ID dibuat", body: `Password Panel 2 ditampilkan sekali di modal.` });
     } catch (err) {
       pushToast({ title: "Gagal membuat", body: err.message, tone: "red" });
@@ -172,7 +168,7 @@ export default function AdminPanels() {
   return (
     <div>
       <PageHeader
-        title="Sub ID / Member"
+        title="Sub ID"
         desc="URL Smartlink diekstrak otomatis. Password Panel 2 tersimpan sebagai bcrypt hash."
         actions={
           <button
@@ -186,7 +182,7 @@ export default function AdminPanels() {
       />
 
       <div className="grid sm:grid-cols-3 gap-4 mb-6">
-        <StatCard icon="users" label="Total Member" value={formatNumber(panels.length)} tone="emerald" />
+        <StatCard icon="users" label="Total Sub ID" value={formatNumber(panels.length)} tone="emerald" />
         <StatCard icon="check" label="Aktif" value={formatNumber(activeCount)} tone="sky" />
         <StatCard icon="chart" label="Total Click" value={formatNumber(totalClicks)} tone="violet" />
       </div>
@@ -199,7 +195,7 @@ export default function AdminPanels() {
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Cari sub id / nama member..."
+              placeholder="Cari sub id..."
               className="w-full bg-navy border border-line rounded-lg pl-9 pr-3 py-2 text-sm focus:outline-none focus:border-emerald/60"
             />
           </div>
@@ -208,7 +204,6 @@ export default function AdminPanels() {
           <table className="w-full text-sm cpa-table">
             <thead>
               <tr className="text-left text-xs text-muted uppercase tracking-wide border-b border-line">
-                <th className="px-5 py-3 font-semibold">Member</th>
                 <th className="px-5 py-3 font-semibold">Sub ID</th>
                 <th className="px-5 py-3 font-semibold">Status</th>
                 <th className="px-5 py-3 font-semibold text-right">Link</th>
@@ -221,12 +216,11 @@ export default function AdminPanels() {
               {filtered.map((p) => (
                 <tr key={p.id} className="border-b border-line/50 last:border-0 hover:bg-surface-2/50">
                   <td className="px-5 py-3">
-                    <Link href={`/admin/panels/${p.id}`} className="font-semibold hover:text-emerald">
-                      {p.panel_name}
+                    <Link href={`/admin/panels/${p.id}`} className="font-mono text-sm text-emerald hover:text-emerald-dim font-semibold">
+                      {p.sub_id}
                     </Link>
                     <div className="text-xs text-muted">{new Date(p.created_at).toLocaleDateString("id-ID")}</div>
                   </td>
-                  <td className="px-5 py-3 font-mono text-xs text-emerald">{p.sub_id}</td>
                   <td className="px-5 py-3">
                     <Badge tone={p.is_active ? "green" : "red"} dot>{p.is_active ? "Aktif" : "Nonaktif"}</Badge>
                   </td>
@@ -264,14 +258,14 @@ export default function AdminPanels() {
               ))}
               {!loading && filtered.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-5 py-10 text-center text-muted">
+                  <td colSpan={6} className="px-5 py-10 text-center text-muted">
                     Tidak ada data yang cocok.
                   </td>
                 </tr>
               )}
               {loading && (
                 <tr>
-                  <td colSpan={7} className="px-5 py-10 text-center text-muted">Memuat...</td>
+                  <td colSpan={6} className="px-5 py-10 text-center text-muted">Memuat...</td>
                 </tr>
               )}
             </tbody>
@@ -329,14 +323,6 @@ export default function AdminPanels() {
                 </div>
               )}
             </div>
-            <Field label="Nama Member / Tim">
-              <input
-                value={form.panel_name}
-                onChange={(e) => setForm({ ...form, panel_name: e.target.value })}
-                placeholder="contoh: Tim Zulu"
-                className={inputCls}
-              />
-            </Field>
             <div>
               <label className="flex items-center gap-2 text-sm">
                 <input
@@ -424,7 +410,6 @@ export default function AdminPanels() {
             </div>
             <div className="bg-navy border border-emerald/30 rounded-lg p-4 space-y-3">
               <InfoRow label="Sub ID" value={created.sub_id} mono />
-              <InfoRow label="Nama Member" value={created.panel_name} />
               <InfoRow label="Smartlink" value={created.smartlink_url} mono break copy />
               <InfoRow label="Link Panel" value="/panel/login" mono />
               <InfoRow label="Password" value={created.password} mono highlight />

@@ -8,7 +8,7 @@ import StatCard from "@/components/StatCard";
 import { Icon } from "@/components/icons";
 import { pushToast } from "@/components/ToastStack";
 import { MonitorCtx } from "../monitor-context";
-import { DeviceLogo, BrowserLogo, AppLogo, CountryFlag } from "@/components/BrandLogo";
+import { DeviceLogo, BrowserLogo, AppLogo, CountryFlag, NetworkLogo } from "@/components/BrandLogo";
 import { FaCrown } from "react-icons/fa";
 import { playLeadSound } from "@/lib/sound";
 import { formatNumber, formatCurrency, dateTime } from "@/lib/mock-data";
@@ -65,9 +65,10 @@ export default function MonitorDashboard() {
 }
 
 function ReportView() {
-  const { currency, reportFrom: from, setReportFrom: setFrom, reportTo: to, setReportTo: setTo } = useContext(MonitorCtx);
+  const { currency, idrRate, reportFrom: from, setReportFrom: setFrom, reportTo: to, setReportTo: setTo } = useContext(MonitorCtx);
   const [range, setRange] = useState("today");
   const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
@@ -77,8 +78,11 @@ function ReportView() {
       .then((d) => {
         if (cancelled) return;
         setData(d.report || []);
+        setLoading(false);
       })
-      .catch(() => {});
+      .catch(() => {
+        if (!cancelled) setLoading(false);
+      });
     return () => {
       cancelled = true;
     };
@@ -86,6 +90,7 @@ function ReportView() {
 
   const applyRange = (key) => {
     if (key === "custom") return;
+    setLoading(true);
     const today = todayISO();
     if (key === "today") {
       setFrom(today);
@@ -128,7 +133,7 @@ function ReportView() {
               <input
                 type="date"
                 value={from}
-                onChange={(e) => { setFrom(e.target.value || todayISO()); setRange("custom"); }}
+                onChange={(e) => { setFrom(e.target.value || todayISO()); setRange("custom"); setLoading(true); }}
                 className="bg-navy border border-line rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald/60 focus:ring-2 focus:ring-emerald/20"
               />
             </div>
@@ -137,7 +142,7 @@ function ReportView() {
               <input
                 type="date"
                 value={to}
-                onChange={(e) => { setTo(e.target.value || todayISO()); setRange("custom"); }}
+                onChange={(e) => { setTo(e.target.value || todayISO()); setRange("custom"); setLoading(true); }}
                 className="bg-navy border border-line rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald/60 focus:ring-2 focus:ring-emerald/20"
               />
             </div>
@@ -148,7 +153,7 @@ function ReportView() {
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
         <StatCard icon="chart" label="Total Click" value={formatNumber(total.clicks)} sub={formatRange(from, to)} tone="violet" />
         <StatCard icon="bolt" label="Conversion" value={formatNumber(total.conversions)} sub={`CR ${crOf(total.conversions, total.clicks)}%`} tone="emerald" />
-        <StatCard icon="wallet" label="Payout" value={formatCurrency(total.earning, currency)} sub={`≈ ${formatCurrency(total.earning, currency === "USD" ? "IDR" : "USD")}`} tone="amber" />
+        <StatCard icon="wallet" label="Payout" value={formatCurrency(total.earning, currency, idrRate)} sub={`≈ ${formatCurrency(total.earning, currency === "USD" ? "IDR" : "USD", idrRate)}`} tone="amber" />
         <StatCard icon="users" label="Sub ID" value={formatNumber((data || []).length)} sub="All Sub ID" tone="sky" />
       </div>
 
@@ -164,19 +169,21 @@ function ReportView() {
           <p className="text-sm text-red-400 px-5 py-10 text-center">
             Tanggal &quot;Dari&quot; tidak boleh lebih besar dari tanggal &quot;Sampai&quot;.
           </p>
-        ) : data === null ? (
+        ) : loading ? (
           <p className="text-sm text-muted px-5 py-10 text-center">Memuat laporan...</p>
+        ) : !data ? (
+          <p className="text-sm text-muted px-5 py-10 text-center">Gagal memuat laporan.</p>
         ) : data.length === 0 ? (
           <p className="text-sm text-muted px-5 py-10 text-center">Belum ada data pada rentang tanggal ini.</p>
         ) : (
-          <ReportTable data={data} currency={currency} />
+          <ReportTable data={data} currency={currency} idrRate={idrRate} />
         )}
       </section>
     </div>
   );
 }
 
-function ReportTable({ data, currency }) {
+function ReportTable({ data, currency, idrRate }) {
   const total = data.reduce(
     (s, r) => ({ clicks: s.clicks + r.clicks, conversions: s.conversions + r.conversions, earning: s.earning + r.earning }),
     { clicks: 0, conversions: 0, earning: 0 }
@@ -201,23 +208,23 @@ function ReportTable({ data, currency }) {
               <td className="px-5 py-3 text-muted tabular-nums">{i + 1}</td>
               <td className="px-5 py-3">
                 <span className="flex items-center gap-1.5">
-                  <span className="font-mono text-xs text-emerald">{r.sub_id}</span>
+                  <span className={`font-mono text-xs ${i === 0 && r.earning > 0 ? "text-emerald" : "text-foreground"}`}>{r.sub_id}</span>
                   {i === 0 && r.earning > 0 && <FaCrown className="w-3.5 h-3.5 text-amber-400 shrink-0" title="Earning tertinggi" />}
                 </span>
               </td>
-              <td className="px-5 py-3 text-muted text-xs">{r.network_name}</td>
+              <td className="px-5 py-3"><NetworkLogo network={r.network_name} size={18} /></td>
               <td className="px-5 py-3 text-right tabular-nums">{formatNumber(r.clicks)}</td>
               <td className="px-5 py-3 text-right tabular-nums">{formatNumber(r.conversions)}</td>
               <td className="px-5 py-3 text-right tabular-nums">{crOf(r.conversions, r.clicks)}%</td>
-              <td className="px-5 py-3 text-right font-semibold text-emerald">{formatCurrency(r.earning, currency)}</td>
+              <td className="px-5 py-3 text-right font-semibold text-emerald">{formatCurrency(r.earning, currency, idrRate)}</td>
             </tr>
           ))}
-          <tr className="bg-emerald/5 border-t border-line">
-            <td className="px-5 py-3 font-bold" colSpan={3}>Total All Sub ID</td>
+          <tr className="bg-emerald/5 border-t border-line/50">
+            <td className="px-5 py-3 font-bold text-center" colSpan={3}>TOTAL</td>
             <td className="px-5 py-3 text-right font-bold tabular-nums">{formatNumber(total.clicks)}</td>
             <td className="px-5 py-3 text-right font-bold tabular-nums">{formatNumber(total.conversions)}</td>
             <td className="px-5 py-3 text-right font-bold tabular-nums">{crOf(total.conversions, total.clicks)}%</td>
-            <td className="px-5 py-3 text-right font-bold text-emerald">{formatCurrency(total.earning, currency)}</td>
+            <td className="px-5 py-3 text-right font-bold text-emerald">{formatCurrency(total.earning, currency, idrRate)}</td>
           </tr>
         </tbody>
       </table>
@@ -226,9 +233,13 @@ function ReportTable({ data, currency }) {
 }
 
 function RealtimeView() {
-  const { currency, setCurrency, refreshOverview, range, setRange } = useContext(MonitorCtx);
+  const { currency, setCurrency, idrRate, setIdrRate, refreshOverview, range, setRange } = useContext(MonitorCtx);
   const [filterSubId, setFilterSubId] = useState("all");
   const [soundOn, setSoundOn] = useState(true);
+  const [notifOn, setNotifOn] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return "Notification" in window && Notification.permission === "granted";
+  });
   const [tab, setTab] = useState("realtime");
 
   const [base, setBase] = useState({
@@ -246,6 +257,32 @@ function RealtimeView() {
   const feedRef = useRef(null);
   const seenIds = useRef(new Set());
   const newestRef = useRef(null);
+  const lastSoundAt = useRef(0);
+  const burstRef = useRef({ n: 0, timer: null });
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !("Notification" in window)) return;
+    if (Notification.permission === "granted" || Notification.permission === "denied") return;
+
+    const request = () => {
+      Notification.requestPermission().then((res) => {
+        if (res === "granted") {
+          setNotifOn(true);
+          window.removeEventListener("pointerdown", request);
+          window.removeEventListener("keydown", request);
+        }
+      });
+    };
+
+    const t = setTimeout(request, 600);
+    window.addEventListener("pointerdown", request);
+    window.addEventListener("keydown", request);
+    return () => {
+      clearTimeout(t);
+      window.removeEventListener("pointerdown", request);
+      window.removeEventListener("keydown", request);
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -302,20 +339,43 @@ function RealtimeView() {
         setFlashId(ev.id);
         refreshOverview();
         if (!notify) return;
-        if (soundOn) playLeadSound();
+        const now = Date.now();
+        if (soundOn && now - lastSoundAt.current >= 1500) {
+          lastSoundAt.current = now;
+          playLeadSound();
+        }
+        burstRef.current.n += 1;
+        clearTimeout(burstRef.current.timer);
+        burstRef.current.timer = setTimeout(() => {
+          burstRef.current.n = 0;
+        }, 2000);
+        try {
+          if (notifOn && "Notification" in window && Notification.permission === "granted") {
+            new Notification("Lead Baru!", {
+              body: `${ev.sub_id} — ${formatCurrency(ev.earning, currency, idrRate)}`,
+              tag: `conv-${ev.id}`,
+            });
+          }
+        } catch {}
         pushToast({
           title: "Lead Baru!",
           body: (
             <>
-              {ev.sub_id} — {formatCurrency(ev.earning, currency)} dari{" "}
+              {ev.sub_id} — {formatCurrency(ev.earning, currency, idrRate)} dari{" "}
               <CountryFlag country={ev.country} size={14} />
+              {burstRef.current.n > 1 && (
+                <span className="ml-1 inline-flex items-center text-[11px] text-amber-400 font-bold">
+                  (+{burstRef.current.n - 1} lagi)
+                </span>
+              )}
             </>
           ),
           tone: "emerald",
+          duration: 2200,
         });
       }
     },
-    [ready, soundOn, currency, refreshOverview]
+    [ready, soundOn, notifOn, currency, idrRate, refreshOverview]
   );
 
   useEffect(() => {
@@ -474,6 +534,19 @@ function RealtimeView() {
               </button>
             ))}
           </div>
+          {currency === "IDR" && (
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-semibold text-muted">1 USD =</span>
+              <input
+                type="number"
+                min="0"
+                value={idrRate}
+                onChange={(e) => setIdrRate(Number(e.target.value) || 0)}
+                className="bg-surface border border-line rounded-lg px-3 py-2 text-xs font-semibold w-24 tabular-nums focus:outline-none focus:border-emerald/60 focus:ring-2 focus:ring-emerald/20"
+              />
+              <span className="text-xs font-semibold text-muted">IDR</span>
+            </div>
+          )}
           <button
             onClick={() => setSoundOn(!soundOn)}
             title={soundOn ? "Suara aktif" : "Suara nonaktif"}
@@ -487,7 +560,7 @@ function RealtimeView() {
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
         <StatCard icon="chart" label="Total Click" value={formatNumber(totalClicks)} sub="All Click" tone="violet" />
         <StatCard icon="bolt" label="Conversion" value={formatNumber(totalConversions)} sub={`CTR ${ctr}%`} tone="emerald" />
-        <StatCard icon="wallet" label="Earning" value={formatCurrency(totalEarning, currency)} sub={`≈ ${formatCurrency(totalEarning, currency === "USD" ? "IDR" : "USD")}`} tone="amber" />
+        <StatCard icon="wallet" label="Earning" value={formatCurrency(totalEarning, currency, idrRate)} sub={`≈ ${formatCurrency(totalEarning, currency === "USD" ? "IDR" : "USD", idrRate)}`} tone="amber" />
         <StatCard icon="monitor" label="Sub ID" value={filterSubId === "all" ? "All Sub ID" : filterSubId} sub={subIds.length + " Sub ID"} tone="sky" />
       </div>
 
@@ -515,6 +588,7 @@ function RealtimeView() {
                   <th className="px-5 py-3 font-semibold">No</th>
                   <th className="px-5 py-3 font-semibold">City</th>
                   <th className="px-5 py-3 font-semibold">Sub ID</th>
+                  <th className="px-5 py-3 font-semibold">Network</th>
                   <th className="px-5 py-3 font-semibold">Country</th>
                   <th className="px-5 py-3 font-semibold">Device</th>
                   <th className="px-5 py-3 font-semibold">App</th>
@@ -536,7 +610,8 @@ function RealtimeView() {
                         <span className="text-xs text-muted">-</span>
                       )}
                     </td>
-                    <td className="px-5 py-3 font-mono text-xs text-emerald">{e.sub_id}</td>
+                    <td className="px-5 py-3 font-mono text-xs text-foreground">{e.sub_id}</td>
+                    <td className="px-5 py-3"><NetworkLogo network={e.network_name || "Trafee"} size={18} /></td>
                     <td className="px-5 py-3"><CountryFlag country={e.country} size={18} /></td>
                     <td className="px-5 py-3"><DeviceCell device={e.os_device} /></td>
                     <td className="px-5 py-3"><AppCell app={e.app} browser={e.browser_app} /></td>
@@ -545,7 +620,7 @@ function RealtimeView() {
                 ))}
                 {feed.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="px-5 py-10 text-center text-muted">Belum ada data untuk filter ini.</td>
+                    <td colSpan={8} className="px-5 py-10 text-center text-muted">Belum ada data untuk filter ini.</td>
                   </tr>
                 )}
               </tbody>
@@ -571,17 +646,17 @@ function RealtimeView() {
                     <td className="px-5 py-3 text-muted tabular-nums text-xs">{i + 1}</td>
                     <td className="px-5 py-3">
                       <span className="flex items-center gap-1.5">
-                        <span className="font-mono text-xs text-emerald">{c.sub_id}</span>
+                        <span className={`font-mono text-xs ${topEarningSubId === c.sub_id ? "text-emerald" : "text-foreground"}`}>{c.sub_id}</span>
                         {topEarningSubId === c.sub_id && (
                           <FaCrown className="w-3.5 h-3.5 text-amber-400 shrink-0" title="Earning tertinggi" />
                         )}
                       </span>
                     </td>
                     <td className="px-5 py-3"><CountryFlag country={c.country} size={18} /></td>
-                    <td className="px-5 py-3 text-muted text-xs">{c.network_name}</td>
+                    <td className="px-5 py-3"><NetworkLogo network={c.network_name} size={18} /></td>
                     <td className="px-5 py-3"><DeviceCell device={c.os_device} /></td>
                     <td className="px-5 py-3"><AppCell app={c.app} browser={c.browser_app} /></td>
-                    <td className="pl-5 pr-14 py-3 text-right font-semibold text-emerald whitespace-nowrap tabular-nums">{formatCurrency(c.earning, currency)}</td>
+                    <td className="pl-5 pr-14 py-3 text-right font-semibold text-emerald whitespace-nowrap tabular-nums">{formatCurrency(c.earning, currency, idrRate)}</td>
                     <td className="px-5 py-3 font-mono text-xs text-muted">{c.ip_address || "-"}</td>
                     <td className="px-5 py-3 text-xs text-muted whitespace-nowrap tabular-nums">{dateTime(c.created_at)}</td>
                   </tr>

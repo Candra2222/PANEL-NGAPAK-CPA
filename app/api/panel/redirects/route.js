@@ -107,7 +107,7 @@ export async function POST(request) {
       sub_id: panel.sub_id,
       slug,
       destination_url: destination,
-      link_name: type === "bulk" ? `${panel.panel_name} ${i + 1}`.trim() : (body.link_name || panel.panel_name),
+      link_name: type === "bulk" ? `${panel.sub_id} ${i + 1}`.trim() : (body.link_name || panel.sub_id),
       og_title: ogTitle,
       og_description: ogDescription,
       og_image: ogImage,
