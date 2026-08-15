@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useContext } from "react";
 import PageHeader from "@/components/PageHeader";
 import Badge from "@/components/Badge";
-import StatCard from "@/components/StatCard";
 import { Icon } from "@/components/icons";
 import { pushToast } from "@/components/ToastStack";
 import { MonitorCtx } from "../monitor-context";
@@ -69,6 +68,7 @@ function ReportView() {
   const [range, setRange] = useState("today");
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [subCount, setSubCount] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -78,6 +78,7 @@ function ReportView() {
       .then((d) => {
         if (cancelled) return;
         setData(d.report || []);
+        setSubCount((d.subIds || []).length);
         setLoading(false);
       })
       .catch(() => {
@@ -107,11 +108,6 @@ function ReportView() {
     }
     setRange(key);
   };
-
-  const total = (data || []).reduce(
-    (s, r) => ({ clicks: s.clicks + r.clicks, conversions: s.conversions + r.conversions, earning: s.earning + r.earning }),
-    { clicks: 0, conversions: 0, earning: 0 }
-  );
 
   const invalidRange = from > to;
 
@@ -150,20 +146,13 @@ function ReportView() {
         }
       />
 
-      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
-        <StatCard icon="chart" label="Total Click" value={formatNumber(total.clicks)} sub={formatRange(from, to)} tone="violet" />
-        <StatCard icon="bolt" label="Conversion" value={formatNumber(total.conversions)} sub={`CR ${crOf(total.conversions, total.clicks)}%`} tone="emerald" />
-        <StatCard icon="wallet" label="Payout" value={formatCurrency(total.earning, currency, idrRate)} sub={`≈ ${formatCurrency(total.earning, currency === "USD" ? "IDR" : "USD", idrRate)}`} tone="amber" />
-        <StatCard icon="users" label="Sub ID" value={formatNumber((data || []).length)} sub="All Sub ID" tone="sky" />
-      </div>
-
       <section className="bg-surface border border-line rounded-xl overflow-hidden">
         <div className="px-5 py-4 border-b border-line flex items-center justify-between flex-wrap gap-2">
           <div>
-            <h2 className="font-bold text-lg">Report per Sub ID</h2>
+            <h2 className="font-bold text-lg">Report</h2>
             <p className="text-xs text-muted mt-0.5">{formatRange(from, to)}</p>
           </div>
-          <Badge tone="green" dot>All Sub ID</Badge>
+          <Badge tone="green" dot>{subCount} Anggota</Badge>
         </div>
         {invalidRange ? (
           <p className="text-sm text-red-400 px-5 py-10 text-center">
@@ -465,25 +454,6 @@ function RealtimeView() {
 
   const liveCount = liveTraffic.length + liveConvs.length;
 
-  const liveInRange = useMemo(() => {
-    const cutoff = rangeCutoff(range);
-    const upper = range === "yesterday" ? startOfConversionDay() : Infinity;
-    const bySub = (x) => (filterSubId === "all" ? true : x.sub_id === filterSubId);
-    const inRange = (x) => {
-      const ts = new Date(x.created_at).getTime();
-      return ts >= cutoff && ts < upper;
-    };
-    return {
-      clicks: liveTraffic.filter(bySub).filter(inRange).length,
-      conversions: liveConvs.filter(bySub).filter(inRange),
-    };
-  }, [liveTraffic, liveConvs, range, filterSubId]);
-
-  const liveEarning = liveInRange.conversions.reduce((s, c) => s + (Number(c.earning) || 0), 0);
-  const totalClicks = base.totals.clicks + liveInRange.clicks;
-  const totalConversions = base.totals.conversions + liveInRange.conversions.length;
-  const totalEarning = base.totals.earning + liveEarning;
-
   const feed = useMemo(() => {
     return [...filteredTraffic]
       .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
@@ -500,7 +470,6 @@ function RealtimeView() {
     return top ? top.sub : null;
   }, [filteredConvs]);
 
-  const ctr = totalClicks > 0 ? ((totalConversions / totalClicks) * 100).toFixed(2) : "0.00";
   const { subIds } = base;
 
   return (
@@ -555,13 +524,6 @@ function RealtimeView() {
             <Icon name="bell" className="w-4 h-4" />
           </button>
         </div>
-      </div>
-
-      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
-        <StatCard icon="chart" label="Total Click" value={formatNumber(totalClicks)} sub="All Click" tone="violet" />
-        <StatCard icon="bolt" label="Conversion" value={formatNumber(totalConversions)} sub={`CTR ${ctr}%`} tone="emerald" />
-        <StatCard icon="wallet" label="Earning" value={formatCurrency(totalEarning, currency, idrRate)} sub={`≈ ${formatCurrency(totalEarning, currency === "USD" ? "IDR" : "USD", idrRate)}`} tone="amber" />
-        <StatCard icon="monitor" label="Sub ID" value={filterSubId === "all" ? "All Sub ID" : filterSubId} sub={subIds.length + " Sub ID"} tone="sky" />
       </div>
 
       <div className="bg-surface border border-line rounded-xl overflow-hidden">
