@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Icon } from "@/components/icons";
+import SiteLogo from "@/components/SiteLogo";
 
 const panels = [
   {
@@ -57,9 +58,7 @@ export default function Home() {
           <div className="absolute inset-0 rounded-full border border-emerald/20 animate-pulse-ring" style={{ animationDelay: "1s" }} />
           <div className="absolute inset-0 rounded-full border border-emerald/20 animate-pulse-ring" style={{ animationDelay: "2s" }} />
           <div className="absolute inset-0 flex items-center justify-center">
-            <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl bg-emerald/10 border border-emerald/30 flex items-center justify-center text-emerald animate-glow-ring animate-float-y">
-              <Icon name="bolt" className="w-10 h-10 sm:w-12 sm:h-12" />
-            </div>
+            <SiteLogo size={80} className="w-20 h-20 sm:w-24 sm:h-24 animate-glow-ring animate-float-y" />
           </div>
           {orbitChips.map((c) => (
             <div

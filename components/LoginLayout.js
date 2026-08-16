@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Icon } from "./icons";
+import SiteLogo from "./SiteLogo";
 
 const accents = {
   emerald: {
@@ -48,10 +48,9 @@ export default function LoginLayout({ accent = "emerald", brand, badge, children
 
       <div className="relative w-full max-w-sm flex flex-col items-center gap-7">
         <Link href="/" className="group flex flex-col items-center gap-3 animate-fade-up">
-          <div className={`relative w-16 h-16 rounded-2xl bg-gradient-to-br ${a.grad} flex items-center justify-center text-white shadow-xl transition-transform duration-300 group-hover:scale-105`}>
-            <Icon name="bolt" className="w-8 h-8 drop-shadow-md" />
-            <div className="absolute inset-0 rounded-2xl animate-glow-ring" style={{ "--glow": a.glow }} />
-            <div className="absolute inset-0 rounded-2xl ring-1 ring-inset ring-white/20" />
+          <div className="relative w-16 h-16 flex items-center justify-center transition-transform duration-300 group-hover:scale-105">
+            <div className="absolute inset-0 rounded-full animate-glow-ring" style={{ "--glow": a.glow }} />
+            <SiteLogo size={56} className="relative drop-shadow-md" />
           </div>
           <div className="text-center">
             <div className="text-lg font-bold tracking-tight">{brand}</div>
