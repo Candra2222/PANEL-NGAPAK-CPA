@@ -4,40 +4,27 @@ import { useState } from "react";
 import PageHeader from "@/components/PageHeader";
 import Badge from "@/components/Badge";
 import StatCard from "@/components/StatCard";
-import CopyButton from "@/components/CopyButton";
 import { Icon } from "@/components/icons";
 import { pushToast } from "@/components/ToastStack";
-import { mockDomains, timeAgo } from "@/lib/mock-data";
-
-const CLOUDFLARE_IP = "76.76.21.21";
-const TTL_OPTIONS = ["Auto", "1 min", "5 min", "1 hour", "1 day"];
+import { mockDomains } from "@/lib/mock-data";
 
 export default function AdminDomains() {
   const [domains, setDomains] = useState(mockDomains);
   const [showAdd, setShowAdd] = useState(false);
-  const [setupFor, setSetupFor] = useState(null);
-  const [verifying, setVerifying] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
 
-  const [addForm, setAddForm] = useState({
-    name: "",
-    zone: "",
-    record_type: "A",
-    target: CLOUDFLARE_IP,
-    proxied: true,
-    ttl: "Auto",
-  });
+  const [addForm, setAddForm] = useState({ name: "" });
 
   const activeCount = domains.filter((d) => d.is_active).length;
   const verifiedCount = domains.filter((d) => d.dns_status === "verified").length;
 
   const addDomain = (e) => {
     e.preventDefault();
-    if (!addForm.name.trim() || !addForm.zone.trim()) {
-      pushToast({ title: "Lengkapi form", body: "Nama domain dan zone wajib diisi.", tone: "red" });
+    const full = addForm.name.trim().toLowerCase();
+    if (!full) {
+      pushToast({ title: "Lengkapi form", body: "Nama domain wajib diisi.", tone: "red" });
       return;
     }
-    const full = addForm.name.trim().toLowerCase();
     if (domains.some((d) => d.name === full)) {
       pushToast({ title: "Domain sudah ada", body: full, tone: "red" });
       return;
@@ -45,24 +32,15 @@ export default function AdminDomains() {
     const nd = {
       id: "d" + Date.now(),
       name: full,
-      zone: addForm.zone.trim().toLowerCase(),
+      zone: full,
       is_active: true,
       dns_status: "pending",
-      record_type: addForm.record_type,
-      target: addForm.record_type === "CNAME" ? addForm.target.trim() : CLOUDFLARE_IP,
-      proxied: addForm.proxied,
-      ttl: addForm.ttl,
       added_at: new Date().toISOString(),
     };
     setDomains((prev) => [nd, ...prev]);
     setShowAdd(false);
-    setAddForm({ name: "", zone: "", record_type: "A", target: CLOUDFLARE_IP, proxied: true, ttl: "Auto" });
-    setSetupFor(nd.id);
-    pushToast({ title: "Domain ditambahkan", body: "Lanjutkan setup DNS Cloudflare." });
-  };
-
-  const updateSetup = (patch) => {
-    setDomains((prev) => prev.map((d) => (d.id === setupFor ? { ...d, ...patch } : d)));
+    setAddForm({ name: "" });
+    pushToast({ title: "Domain ditambahkan", body: "Setup DNS manual di Cloudflare." });
   };
 
   const toggleActive = (id) => {
@@ -75,32 +53,24 @@ export default function AdminDomains() {
     });
   };
 
-  const verify = (id) => {
-    setVerifying(true);
-    pushToast({ title: "Memeriksa DNS...", body: "Menunggu propagasi & validasi Cloudflare.", tone: "sky" });
-    setTimeout(() => {
-      setDomains((prev) => prev.map((d) => (d.id === id ? { ...d, dns_status: "verified" } : d)));
-      setVerifying(false);
-      setSetupFor(null);
-      pushToast({ title: "DNS terverifikasi", body: "Domain siap dipakai untuk redirect link." });
-    }, 2000);
+  const markVerified = (id) => {
+    setDomains((prev) => prev.map((d) => (d.id === id ? { ...d, dns_status: "verified" } : d)));
+    const d = domains.find((x) => x.id === id);
+    pushToast({ title: "DNS ditandai verified", body: d.name, tone: "emerald" });
   };
 
   const deleteDomain = () => {
     if (!deleteTarget) return;
     setDomains((prev) => prev.filter((d) => d.id !== deleteTarget.id));
-    if (setupFor === deleteTarget.id) setSetupFor(null);
     setDeleteTarget(null);
     pushToast({ title: "Domain dihapus", body: deleteTarget.name, tone: "red" });
   };
-
-  const setupDomain = domains.find((d) => d.id === setupFor);
 
   return (
     <div>
       <PageHeader
         title="Domain / DNS"
-        desc="Kelola domain redirect link (shortener) + setup DNS via Cloudflare. Domain aktif muncul di Panel 2."
+        desc="Kelola domain redirect link (shortener). Tambahkan nama domain, lalu setup record DNS-nya secara manual di Cloudflare."
         actions={
           <button
             onClick={() => setShowAdd(true)}
@@ -121,7 +91,7 @@ export default function AdminDomains() {
       <div className="bg-surface border border-line rounded-xl overflow-hidden">
         <div className="px-5 py-4 border-b border-line">
           <h2 className="font-bold">Daftar Domain Redirect</h2>
-          <p className="text-xs text-muted mt-0.5">Dikelola di Cloudflare — member memilih domain ini saat generate link.</p>
+          <p className="text-xs text-muted mt-0.5">Setup DNS dilakukan manual di Cloudflare — setelah selesai, tandai Verified.</p>
         </div>
         <div className="cpa-table-wrap">
           <table className="w-full text-sm cpa-table">
@@ -129,10 +99,7 @@ export default function AdminDomains() {
               <tr className="text-left text-xs text-muted uppercase tracking-wide border-b border-line">
                 <th className="px-5 py-3 font-semibold">Domain</th>
                 <th className="px-5 py-3 font-semibold">Status</th>
-                <th className="px-5 py-3 font-semibold">Record</th>
-                <th className="px-5 py-3 font-semibold">Proxy</th>
-                <th className="px-5 py-3 font-semibold">TTL</th>
-                <th className="px-5 py-3 font-semibold">Dibuat</th>
+                <th className="px-5 py-3 font-semibold">Tgl Pemasangan</th>
                 <th className="px-5 py-3 font-semibold text-right">Aksi</th>
               </tr>
             </thead>
@@ -141,7 +108,6 @@ export default function AdminDomains() {
                 <tr key={d.id} className="border-b border-line/50 last:border-0 hover:bg-surface-2/50">
                   <td className="px-5 py-3">
                     <div className="font-semibold font-mono text-sm">{d.name}</div>
-                    <div className="text-xs text-muted">zone: {d.zone}</div>
                   </td>
                   <td className="px-5 py-3">
                     {d.dns_status === "verified" ? (
@@ -153,29 +119,28 @@ export default function AdminDomains() {
                       <Badge tone={d.is_active ? "sky" : "gray"}>{d.is_active ? "Aktif" : "Nonaktif"}</Badge>
                     </div>
                   </td>
-                  <td className="px-5 py-3">
-                    <div className="font-mono text-xs text-muted">{d.record_type} → {d.target || "—"}</div>
+                  <td className="px-5 py-3 text-xs text-muted">
+                    {d.added_at
+                      ? new Date(d.added_at).toLocaleString("id-ID", {
+                          day: "2-digit",
+                          month: "short",
+                          year: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })
+                      : "—"}
                   </td>
-                  <td className="px-5 py-3">
-                    {d.proxied ? (
-                      <span className="inline-flex items-center gap-1 text-xs font-semibold text-orange-400">
-                        <Icon name="globe" className="w-3.5 h-3.5" /> Proxied
-                      </span>
-                    ) : (
-                      <span className="text-xs text-muted">DNS only</span>
-                    )}
-                  </td>
-                  <td className="px-5 py-3 text-xs text-muted">{d.ttl}</td>
-                  <td className="px-5 py-3 text-xs text-muted">{timeAgo(d.added_at)}</td>
                   <td className="px-5 py-3">
                     <div className="flex items-center justify-end gap-1">
-                      <button
-                        onClick={() => setSetupFor(d.id)}
-                        className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-semibold border border-line text-muted hover:text-emerald hover:border-emerald/40 transition-colors"
-                      >
-                        <Icon name="globe" className="w-3.5 h-3.5" />
-                        Setup DNS
-                      </button>
+                      {d.dns_status === "pending" && (
+                        <button
+                          onClick={() => markVerified(d.id)}
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-semibold border border-line text-muted hover:text-emerald hover:border-emerald/40 transition-colors"
+                        >
+                          <Icon name="shield" className="w-3.5 h-3.5" />
+                          Tandai Verified
+                        </button>
+                      )}
                       <button
                         onClick={() => toggleActive(d.id)}
                         className={`p-2 rounded-lg transition-colors ${d.is_active ? "text-muted hover:text-amber-400 hover:bg-amber-500/10" : "text-muted hover:text-emerald hover:bg-emerald/10"}`}
@@ -202,50 +167,12 @@ export default function AdminDomains() {
       {showAdd && (
         <Modal title="Tambah Domain Redirect" onClose={() => setShowAdd(false)}>
           <form onSubmit={addDomain} className="space-y-4">
-            <Field label="Nama Record (subdomain)">
-              <input value={addForm.name} onChange={(e) => setAddForm({ ...addForm, name: e.target.value })} placeholder="contoh: go.panelcpa.my.id" className={inputCls} autoFocus />
+            <Field label="Nama Domain">
+              <input value={addForm.name} onChange={(e) => setAddForm({ name: e.target.value })} placeholder="contoh: fumifun.sbs atau go.fumifun.sbs" className={inputCls} autoFocus />
             </Field>
-            <Field label="Zone (domain utama di Cloudflare)">
-              <input value={addForm.zone} onChange={(e) => setAddForm({ ...addForm, zone: e.target.value })} placeholder="contoh: panelcpa.my.id" className={inputCls} />
-            </Field>
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Tipe Record">
-                <select
-                  value={addForm.record_type}
-                  onChange={(e) => setAddForm({ ...addForm, record_type: e.target.value })}
-                  className={inputCls}
-                >
-                  <option value="A">A</option>
-                  <option value="AAAA">AAAA</option>
-                  <option value="CNAME">CNAME</option>
-                </select>
-              </Field>
-              <Field label="TTL">
-                <select value={addForm.ttl} onChange={(e) => setAddForm({ ...addForm, ttl: e.target.value })} className={inputCls}>
-                  {TTL_OPTIONS.map((t) => (
-                    <option key={t}>{t}</option>
-                  ))}
-                </select>
-              </Field>
-            </div>
-            {addForm.record_type === "CNAME" ? (
-              <Field label="CNAME Target (canonical redirect host)">
-                <input value={addForm.target} onChange={(e) => setAddForm({ ...addForm, target: e.target.value })} placeholder="redirect.panel-cpa.id" className={`${inputCls} font-mono text-xs`} />
-              </Field>
-            ) : (
-              <div className="bg-navy border border-line rounded-lg px-3.5 py-2.5 flex items-center justify-between gap-2">
-                <div>
-                  <div className="text-xs text-muted">Target IP (hosting redirect)</div>
-                  <div className="font-mono text-sm text-emerald font-bold">{CLOUDFLARE_IP}</div>
-                </div>
-                <CopyButton text={CLOUDFLARE_IP} />
-              </div>
-            )}
-            <div>
-              <label className="flex items-center gap-2 text-sm">
-                <input type="checkbox" checked={addForm.proxied} onChange={(e) => setAddForm({ ...addForm, proxied: e.target.checked })} className="accent-emerald" />
-                Proxy lewat Cloudflare (orange cloud)
-              </label>
+            <div className="bg-sky-500/10 border border-sky-500/30 rounded-lg px-3.5 py-3 text-xs text-sky-300 flex gap-2">
+              <Icon name="globe" className="w-4 h-4 shrink-0 mt-0.5" />
+              Setelah ditambahkan, buka Cloudflare → DNS → Records → buat record A/CNAME untuk domain ini, lalu tandai Verified di panel.
             </div>
             <div className="flex gap-2 justify-end pt-1">
               <button type="button" onClick={() => setShowAdd(false)} className="px-4 py-2 rounded-lg border border-line text-sm font-semibold text-muted hover:text-foreground transition-colors">
@@ -256,93 +183,6 @@ export default function AdminDomains() {
               </button>
             </div>
           </form>
-        </Modal>
-      )}
-
-      {setupDomain && (
-        <Modal title={`Setup DNS — ${setupDomain.name}`} onClose={() => setSetupFor(null)}>
-          <div className="space-y-4">
-            <div className="bg-sky-500/10 border border-sky-500/30 rounded-lg px-3.5 py-3 text-xs text-sky-300 flex gap-2">
-              <Icon name="globe" className="w-4 h-4 shrink-0 mt-0.5" />
-              Buka Cloudflare → pilih zone <span className="font-mono">{setupDomain.zone}</span> → menu DNS → tambahkan record berikut.
-            </div>
-
-            <div className="bg-navy border border-line rounded-lg p-4 space-y-2.5">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-xs text-muted">Type</span>
-                <select
-                  value={setupDomain.record_type}
-                  onChange={(e) => updateSetup({ record_type: e.target.value })}
-                  className="bg-surface border border-line rounded-md px-2 py-1 text-xs font-semibold"
-                >
-                  <option value="A">A</option>
-                  <option value="AAAA">AAAA</option>
-                  <option value="CNAME">CNAME</option>
-                </select>
-              </div>
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-xs text-muted">Name</span>
-                <code className="text-xs text-emerald break-all">{setupDomain.name}</code>
-              </div>
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-xs text-muted shrink-0">Target</span>
-                <div className="flex items-center gap-2 min-w-0">
-                  {setupDomain.record_type === "CNAME" ? (
-                    <input
-                      value={setupDomain.target}
-                      onChange={(e) => updateSetup({ target: e.target.value })}
-                      className="w-full bg-surface border border-line rounded-md px-2 py-1 text-xs font-mono"
-                    />
-                  ) : (
-                    <code className="text-xs text-emerald">{CLOUDFLARE_IP}</code>
-                  )}
-                </div>
-              </div>
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-xs text-muted">Proxy</span>
-                <label className="flex items-center gap-2 text-xs">
-                  <input
-                    type="checkbox"
-                    checked={setupDomain.proxied}
-                    onChange={(e) => updateSetup({ proxied: e.target.checked })}
-                    className="accent-emerald"
-                  />
-                  <span className={setupDomain.proxied ? "text-orange-400 font-semibold" : "text-muted"}>
-                    {setupDomain.proxied ? "Proxied (orange cloud)" : "DNS only"}
-                  </span>
-                </label>
-              </div>
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-xs text-muted">TTL</span>
-                <select
-                  value={setupDomain.ttl}
-                  onChange={(e) => updateSetup({ ttl: e.target.value })}
-                  className="bg-surface border border-line rounded-md px-2 py-1 text-xs font-semibold"
-                >
-                  {TTL_OPTIONS.map((t) => (
-                    <option key={t}>{t}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div className="flex gap-2">
-              <CopyButton
-                text={`${setupDomain.record_type} ${setupDomain.name} → ${setupDomain.record_type === "CNAME" ? setupDomain.target : CLOUDFLARE_IP} (${setupDomain.proxied ? "proxied" : "DNS only"}, TTL ${setupDomain.ttl})`}
-                label="Salin config"
-              />
-              <button
-                onClick={() => verify(setupDomain.id)}
-                disabled={verifying}
-                className="flex-1 py-2.5 rounded-lg bg-emerald text-navy text-sm font-bold hover:bg-emerald-dim transition-colors disabled:opacity-60"
-              >
-                {verifying ? "Memverifikasi..." : "Verifikasi DNS"}
-              </button>
-            </div>
-            <p className="text-xs text-muted/70 leading-relaxed">
-              Catatan: integrasi API Cloudflare akan menyatu dengan backend. Preview ini menampilkan record yang harus dibuat manual di dashboard Cloudflare.
-            </p>
-          </div>
         </Modal>
       )}
 

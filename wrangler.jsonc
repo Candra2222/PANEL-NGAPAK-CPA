@@ -5,6 +5,13 @@
   "compatibility_date": "2025-06-01",
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": true,
+  "routes": [
+    { "pattern": "fumifun.sbs", "custom_domain": true },
+    { "pattern": "*.fumifun.sbs/*", "zone_id": "68e15cd444172b48aedf873b42eae7a7" }
+  ],
+  "vars": {
+    "REDIRECT_DOMAIN": "fumifun.sbs"
+  },
   "assets": {
     "directory": ".open-next/assets",
     "binding": "ASSETS"

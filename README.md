@@ -39,7 +39,7 @@ Isi `.env.local`:
 | `AUTH_SECRET` | String acak panjang untuk JWT, mis. `openssl rand -base64 32` |
 | `INITIAL_ADMIN_PASSWORD` | Password awal Panel 1 (dipakai saat tabel `admin_access` masih kosong) |
 | `INITIAL_MONITOR_PASSWORD` | Password awal Panel 3 (dipakai saat tabel `monitor_access` masih kosong) |
-| `REDIRECT_DOMAIN` | Domain redirect, mis. `go.panel-cpa.id` |
+| `REDIRECT_DOMAIN` | Domain redirect, mis. `fumifun.sbs` |
 | `REDIRECT_DOMAINS` | (opsional) Daftar domain dipisah koma untuk opsi pilihan member |
 | `POSTBACK_TOKEN` | (opsional) Token pengaman endpoint postback |
 
@@ -76,7 +76,7 @@ Content-Type: application/json
 ### Redirect Link
 
 ```
-GET /[slug]     (mis. https://go.panel-cpa.id/penawaran-agustus)
+GET /[slug]     (mis. https://fumifun.sbs/penawaran-agustus)
 ```
 
 - Bot/crawler/preview → HTML dengan meta OG.

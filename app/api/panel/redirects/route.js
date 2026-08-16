@@ -1,6 +1,6 @@
 import { error, json, requireSession } from "@/lib/api";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
-import { isValidUrl, randomSlug } from "@/lib/links";
+import { isValidUrl, randomSlug, randomSubdomainPrefix, redirectDomain, SUBDOMAIN_PREFIX_RE } from "@/lib/links";
 
 const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const MAX_SLUG_LEN = 64;
@@ -65,6 +65,12 @@ export async function POST(request) {
   const count = Math.min(100, Math.max(1, parseInt(body.count, 10) || 1));
 
   const domain = typeof body.domain === "string" && body.domain.trim() ? body.domain.trim() : "";
+  const useSubdomain = body.use_subdomain === true || body.use_subdomain === "true";
+  const requestedPrefix =
+    typeof body.subdomain_prefix === "string" && SUBDOMAIN_PREFIX_RE.test(body.subdomain_prefix.trim())
+      ? body.subdomain_prefix.trim()
+      : "";
+  const baseDomain = domain || redirectDomain();
   const redirectMode = body.redirect_mode === "spinner" ? "spinner" : "direct";
   const ogTitle = typeof body.og_title === "string" ? body.og_title.trim().slice(0, 200) : "";
   const ogDescription = typeof body.og_description === "string" ? body.og_description.trim().slice(0, 500) : "";
@@ -102,6 +108,12 @@ export async function POST(request) {
     if (used.has(slug)) return error(`Slug "${slug}" sudah dipakai.`, 409);
     used.add(slug);
 
+    let rowDomain = domain;
+    if (useSubdomain) {
+      const prefix = i === 0 && requestedPrefix ? requestedPrefix : randomSubdomainPrefix();
+      rowDomain = `${prefix}.${baseDomain}`;
+    }
+
     rows.push({
       panel_id: panel.id,
       sub_id: panel.sub_id,
@@ -111,7 +123,7 @@ export async function POST(request) {
       og_title: ogTitle,
       og_description: ogDescription,
       og_image: ogImage,
-      domain,
+      domain: rowDomain,
       redirect_mode: redirectMode,
     });
   }

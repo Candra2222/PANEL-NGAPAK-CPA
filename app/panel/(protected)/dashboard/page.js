@@ -8,6 +8,7 @@ import { Icon } from "@/components/icons";
 import { pushToast } from "@/components/ToastStack";
 import { getAuthedData } from "@/lib/auth";
 import { formatNumber, fullLink } from "@/lib/mock-data";
+import { randomSubdomainPrefix } from "@/lib/links";
 
 export default function PanelDashboard() {
   const session = getAuthedData("panel") || { sub_id: "—", smartlink_url: "", domains: [] };
@@ -34,12 +35,16 @@ export default function PanelDashboard() {
     og_title: "",
     og_description: "",
     og_image: "",
+    use_subdomain: false,
+    subdomain_prefix: "",
   });
 
   const [bulk, setBulk] = useState({
     count: 1,
     domain: defaultDomain,
     redirect_mode: "direct",
+    use_subdomain: false,
+    subdomain_example: "",
   });
 
   const load = () => {
@@ -81,6 +86,8 @@ export default function PanelDashboard() {
           og_title: single.og_title,
           og_description: single.og_description,
           og_image: single.og_image,
+          use_subdomain: single.use_subdomain,
+          subdomain_prefix: single.use_subdomain ? single.subdomain_prefix : undefined,
         }),
       });
       const link = data.redirects[0];
@@ -122,6 +129,7 @@ export default function PanelDashboard() {
           count,
           domain: bulk.domain,
           redirect_mode: bulk.redirect_mode,
+          use_subdomain: bulk.use_subdomain,
         }),
       });
       const created = data.redirects || [];
@@ -241,6 +249,21 @@ export default function PanelDashboard() {
                 <p className="text-[11px] text-muted/70 -mt-3">
                   Domain default gratis Cloudflare (workers.dev) — custom domain bisa ditambahkan admin nanti.
                 </p>
+                <SubdomainToggle
+                  id="sd-single"
+                  checked={single.use_subdomain}
+                  onChange={(on) =>
+                    setSingle({
+                      ...single,
+                      use_subdomain: on,
+                      subdomain_prefix: on ? single.subdomain_prefix || randomSubdomainPrefix() : "",
+                    })
+                  }
+                  onRandomize={() => setSingle({ ...single, subdomain_prefix: randomSubdomainPrefix() })}
+                  prefix={single.use_subdomain ? single.subdomain_prefix : ""}
+                  domain={single.use_subdomain ? single.domain : ""}
+                  label="Single"
+                />
                 <RedirectModeField value={single.redirect_mode} onChange={(v) => setSingle({ ...single, redirect_mode: v })} />
                 <Field label="OG Title">
                   <input value={single.og_title} onChange={(e) => setSingle({ ...single, og_title: e.target.value })} placeholder="Judul preview saat dibagikan" className={inputCls} />
@@ -279,6 +302,21 @@ export default function PanelDashboard() {
                 <p className="text-[11px] text-muted/70 -mt-2">
                   Domain default gratis Cloudflare (workers.dev) — custom domain bisa ditambahkan admin nanti.
                 </p>
+                <SubdomainToggle
+                  id="sd-bulk"
+                  checked={bulk.use_subdomain}
+                  onChange={(on) =>
+                    setBulk({
+                      ...bulk,
+                      use_subdomain: on,
+                      subdomain_example: on ? bulk.subdomain_example || randomSubdomainPrefix() : "",
+                    })
+                  }
+                  onRandomize={() => setBulk({ ...bulk, subdomain_example: randomSubdomainPrefix() })}
+                  prefix={bulk.use_subdomain ? bulk.subdomain_example : ""}
+                  domain={bulk.use_subdomain ? bulk.domain : ""}
+                  label="Bulk"
+                />
                 <RedirectModeField value={bulk.redirect_mode} onChange={(v) => setBulk({ ...bulk, redirect_mode: v })} />
                 <p className="text-xs text-muted -mt-1">
                   Cukup set jumlah link & pilih domain — {Math.max(1, parseInt(bulk.count, 10) || 1)} link langsung dibuat dengan slug acak, Sub ID & Smartlink otomatis tertanam.
@@ -515,6 +553,38 @@ function Row({ label, value, mono }) {
     <div className="flex items-center justify-between gap-3">
       <span className="text-xs text-muted">{label}</span>
       <span className={`text-sm font-bold ${mono ? "font-mono text-emerald" : ""}`}>{value}</span>
+    </div>
+  );
+}
+
+function SubdomainToggle({ id, checked, onChange, onRandomize, prefix, domain, label }) {
+  return (
+    <div>
+      <label className="flex items-center gap-2 text-sm mb-1.5 cursor-pointer">
+        <input type="checkbox" id={id} checked={checked} onChange={(e) => onChange(e.target.checked)} className="accent-emerald" />
+        Subdomain acak <span className="text-muted">(nama cewek eropa + kode)</span>
+      </label>
+      {checked && (
+        <div className="bg-navy border border-line rounded-lg px-3.5 py-2.5 space-y-1">
+          <div className="flex items-center gap-2">
+            <code className="flex-1 text-xs text-emerald break-all">
+              https://{prefix || "..."}.{domain}/slug
+            </code>
+            <button
+              type="button"
+              onClick={onRandomize}
+              className="shrink-0 text-xs font-semibold text-muted hover:text-emerald transition-colors"
+            >
+              Acak
+            </button>
+          </div>
+          <p className="text-[11px] text-muted/70">
+            {label === "Bulk"
+              ? "Contoh di atas — tiap link mendapat subdomain berbeda otomatis."
+              : "Subdomain acak dipakai untuk link ini."}
+          </p>
+        </div>
+      )}
     </div>
   );
 }

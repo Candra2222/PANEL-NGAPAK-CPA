@@ -1,8 +1,15 @@
 -- ============================================================
 -- CPA LINK PANEL SYSTEM — Supabase / Postgres Schema
+-- FILE TUNGGAL: cukup paste di Supabase Dashboard -> SQL Editor
+-- dan run SEKALI untuk membuat seluruh database.
+--
 -- Semua akses lewat API Route server-side dengan service_role key.
 -- RLS: deny by default (tanpa policy = anon tidak bisa apa-apa).
--- Jalankan: Supabase Dashboard -> SQL Editor -> paste & Run.
+--
+-- Kredensial Panel 1 (Admin) & Panel 3 (Monitor) TIDAK perlu di-seed
+-- manual: aplikasi membuatnya otomatis dari env secret
+-- (INITIAL_ADMIN_PASSWORD / INITIAL_MONITOR_PASSWORD) saat login
+-- pertama (lihat lib/bootstrap.js). Jadi cukup run file ini.
 -- ============================================================
 
 begin;
@@ -77,6 +84,7 @@ create table if not exists public.traffic_logs (
   postal_code text,
   browser_app text,
   os_device text,
+  app text,
   created_at timestamptz not null default now()
 );
 
@@ -94,6 +102,7 @@ create table if not exists public.conversions (
   ip_address text,
   browser_app text,
   os_device text,
+  app text,
   created_at timestamptz not null default now()
 );
 
