@@ -2,7 +2,7 @@ import { error, json, requireSession } from "@/lib/api";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { dailyAggregate, groupBy } from "@/lib/aggregate";
 
-const DAYS = 14;
+const DAYS = 30;
 const iso = (d) => d.toISOString().slice(0, 10);
 
 export async function GET() {
@@ -38,8 +38,7 @@ export async function GET() {
     supabase
       .from("conversions")
       .select("id, panel_id, network_name, country, earning, created_at")
-      .order("created_at", { ascending: false })
-      .limit(20),
+      .order("created_at", { ascending: false }),
   ]);
 
   if (

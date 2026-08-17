@@ -86,16 +86,24 @@ Deno.serve(async (req) => {
     .maybeSingle();
   if (panelError) return json({ ok: false, error: "Gagal memuat panel." }, 500);
 
+  const { data: lastTraffic } = await supabase
+    .from("traffic_logs")
+    .select("app, browser_app, os_device, ip_address")
+    .eq("sub_id", subId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
   const insert = {
     panel_id: panel?.id || null,
     sub_id: subId,
     network_name: pick(params, ["network"]) || "Trafee",
     country: pick(params, ["country"]) || null,
     earning: toNum(pick(params, ["earning", "payout", "sum", "commission"])),
-    ip_address: pick(params, ["ip", "ip_address"]) || (clientIp !== "unknown" ? clientIp : null),
-    browser_app: pick(params, ["browser", "browser_app"]) || null,
-    os_device: pick(params, ["os", "os_device"]) || null,
-    app: pick(params, ["app", "app_name"]) || null,
+    ip_address: pick(params, ["ip", "ip_address"]) || (clientIp !== "unknown" ? clientIp : null) || lastTraffic?.ip_address || null,
+    browser_app: pick(params, ["browser", "browser_app"]) || lastTraffic?.browser_app || null,
+    os_device: pick(params, ["os", "os_device"]) || lastTraffic?.os_device || null,
+    app: pick(params, ["app", "app_name"]) || lastTraffic?.app || null,
   };
 
   const { error: insertError } = await supabase.from("conversions").insert(insert);

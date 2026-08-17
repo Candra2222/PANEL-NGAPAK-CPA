@@ -95,9 +95,9 @@ export default function PanelDetail() {
     );
   }
 
-  const { panel, redirects, conversions, traffic } = data;
+  const { panel, redirects, traffic } = data;
   const clicks = redirects.reduce((s, r) => s + r.clicks, 0);
-  const earning = conversions.reduce((s, c) => s + Number(c.earning || 0), 0);
+  const earning = panel.earning;
 
   return (
     <div>
@@ -131,7 +131,7 @@ export default function PanelDetail() {
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
         <StatCard icon="link" label="Jumlah Link" value={formatNumber(redirects.length)} tone="sky" />
         <StatCard icon="chart" label="Total Click" value={formatNumber(clicks)} tone="violet" />
-        <StatCard icon="bolt" label="Conversion" value={formatNumber(conversions.length)} tone="emerald" />
+        <StatCard icon="bolt" label="Conversion" value={formatNumber(panel.conversions)} tone="emerald" />
         <StatCard icon="wallet" label="Earning" value={formatCurrency(earning, "USD")} sub={`≈ ${formatCurrency(earning, "IDR")}`} tone="amber" />
       </div>
 
@@ -157,7 +157,7 @@ export default function PanelDetail() {
             </div>
             <div className="flex justify-between gap-3">
               <dt className="text-muted">CTR</dt>
-              <dd>{clicks > 0 ? ((conversions.length / clicks) * 100).toFixed(2) : "0.00"}%</dd>
+              <dd>{clicks > 0 ? ((panel.conversions / clicks) * 100).toFixed(2) : "0.00"}%</dd>
             </div>
           </dl>
         </div>

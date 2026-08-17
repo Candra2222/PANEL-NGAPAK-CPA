@@ -28,8 +28,7 @@ async function fetchConversions(supabase, fromISO, toISO, subId) {
       .select(cols)
       .gte("created_at", fromISO)
       .lte("created_at", toISO)
-      .order("created_at", { ascending: false })
-      .limit(100);
+      .order("created_at", { ascending: false });
     if (subId && subId !== "all") q = q.eq("sub_id", subId);
     const { data, error } = await q;
     if (error) {

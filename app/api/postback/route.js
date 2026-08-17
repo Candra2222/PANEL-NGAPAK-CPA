@@ -77,16 +77,24 @@ export async function handler(request) {
     return json({ ok: false, error: "Gagal memuat panel." }, { status: 500 });
   }
 
+  const { data: lastTraffic } = await supabase
+    .from("traffic_logs")
+    .select("app, browser_app, os_device, ip_address")
+    .eq("sub_id", subId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
   const insert = {
     panel_id: panel?.id || null,
     sub_id: subId,
     network_name: "Trafee",
     country: country || null,
     earning: isFinite(earning) && earning > 0 ? earning : 0,
-    ip_address: ip || (requestIp && requestIp !== "unknown" ? requestIp : null),
-    browser_app: browser || null,
-    os_device: os || null,
-    app: app || null,
+    ip_address: ip || (requestIp && requestIp !== "unknown" ? requestIp : null) || lastTraffic?.ip_address || null,
+    browser_app: browser || lastTraffic?.browser_app || null,
+    os_device: os || lastTraffic?.os_device || null,
+    app: app || lastTraffic?.app || null,
   };
   let { error: insertError } = await supabase.from("conversions").insert(insert);
   if (insertError && app) {

@@ -15,7 +15,6 @@ export async function GET(_request, { params }) {
     { data: panel, error: panelError },
     { data: redirects, error: redirectsError },
     convAgg,
-    { data: conversions, error: convError },
     { data: traffic, error: trafficError },
   ] = await Promise.all([
     supabase.from("panels").select("*").eq("id", id).maybeSingle(),
@@ -26,12 +25,6 @@ export async function GET(_request, { params }) {
       .order("created_at", { ascending: false }),
     countSumWhere("conversions", "earning", (q) => q.eq("panel_id", id)),
     supabase
-      .from("conversions")
-      .select("network_name, country, earning, created_at")
-      .eq("panel_id", id)
-      .order("created_at", { ascending: false })
-      .limit(100),
-    supabase
       .from("traffic_logs")
       .select("ip_address, country, browser_app, os_device, created_at")
       .eq("panel_id", id)
@@ -41,7 +34,6 @@ export async function GET(_request, { params }) {
   if (panelError) return error("Gagal memuat member.", 500, { detail: panelError.message });
   if (!panel) return error("Member tidak ditemukan.", 404);
   if (redirectsError) return error("Gagal memuat link.", 500);
-  if (convError) return error("Gagal memuat konversi.", 500);
   if (trafficError) return error("Gagal memuat traffic.", 500);
 
   const clicks = (redirects || []).reduce((s, r) => s + r.clicks, 0);
@@ -62,7 +54,6 @@ export async function GET(_request, { params }) {
       earning: parseFloat(earning.toFixed(2)),
     },
     redirects: redirects || [],
-    conversions: conversions || [],
     traffic: traffic || [],
   });
 }

@@ -41,8 +41,7 @@ export async function GET(request) {
       .select(cols)
       .gte("created_at", sinceISO)
       .lte("created_at", toISO)
-      .order("created_at", { ascending: false })
-      .limit(100);
+      .order("created_at", { ascending: false });
     if (subId && subId !== "all") q = q.eq("sub_id", subId);
     return q;
   };
