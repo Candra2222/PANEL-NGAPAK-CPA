@@ -1,6 +1,7 @@
 import { error, json, requireSession } from "@/lib/api";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { isValidUrl, randomSlug, randomSubdomainPrefix, redirectDomain, SUBDOMAIN_PREFIX_RE } from "@/lib/links";
+import { countSumWhere } from "@/lib/aggregate";
 
 const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const MAX_SLUG_LEN = 64;
@@ -23,35 +24,31 @@ export async function GET() {
   if (panelError) return error("Gagal memuat member.", 500);
   if (!panel || !panel.is_active) return error("Akun member dinonaktifkan.", 403);
 
-  const { data, error: dbError } = await supabase
-    .from("redirects")
-    .select("id, sub_id, slug, destination_url, link_name, og_title, og_description, og_image, domain, redirect_mode, clicks, created_at")
-    .eq("panel_id", session.panel_id)
-    .order("created_at", { ascending: false });
+  const [{ data, error: dbError }, statsAgg] = await Promise.all([
+    supabase
+      .from("redirects")
+      .select("id, sub_id, slug, link_name, og_title, og_description, og_image, domain, redirect_mode, link_type, clicks, created_at")
+      .eq("panel_id", session.panel_id)
+      .order("created_at", { ascending: false }),
+    countSumWhere("conversions", "earning", (q) => q.eq("panel_id", session.panel_id)),
+  ]);
   if (dbError) return error("Gagal memuat daftar link.", 500, { detail: dbError.message });
-
-  const { data: convs, error: convError } = await supabase
-    .from("conversions")
-    .select("earning")
-    .eq("panel_id", session.panel_id);
-  if (convError) return error("Gagal memuat statistik.", 500);
 
   const redirects = data || [];
   const clicks = redirects.reduce((s, r) => s + (r.clicks || 0), 0);
-  const earning = (convs || []).reduce((s, c) => s + Number(c.earning || 0), 0);
+  const earning = statsAgg.sum || 0;
 
   return json({
     redirects,
     stats: {
       links: redirects.length,
       clicks,
-      conversions: (convs || []).length,
+      conversions: statsAgg.count || 0,
       earning: parseFloat(earning.toFixed(2)),
     },
     panel: {
       panel_name: panel.panel_name,
       sub_id: panel.sub_id,
-      smartlink_url: panel.smartlink_url,
     },
   });
 }
@@ -61,7 +58,7 @@ export async function POST(request) {
   if (!session) return error("Unauthorized.", 401);
 
   const body = await request.json().catch(() => ({}));
-  const type = body.type === "bulk" ? "bulk" : "single";
+  const type = body.type === "bulk" ? "bulk" : "img";
   const count = Math.min(100, Math.max(1, parseInt(body.count, 10) || 1));
 
   const domain = typeof body.domain === "string" && body.domain.trim() ? body.domain.trim() : "";
@@ -97,7 +94,7 @@ export async function POST(request) {
   const rows = [];
   for (let i = 0; i < count; i++) {
     let slug = "";
-    if (type === "single" && body.slug) {
+    if (type === "img" && body.slug) {
       slug = cleanSlug(body.slug);
       if (slug.length > MAX_SLUG_LEN) return error("Slug terlalu panjang (maks. 64 karakter).", 400);
       if (!SLUG_RE.test(slug)) return error("Slug hanya boleh huruf kecil, angka, dan tanda strip.", 400);
@@ -125,13 +122,14 @@ export async function POST(request) {
       og_image: ogImage,
       domain: rowDomain,
       redirect_mode: redirectMode,
+      link_type: type,
     });
   }
 
   const { data: created, error: insertError } = await supabase
     .from("redirects")
     .insert(rows)
-    .select("id, sub_id, slug, destination_url, link_name, domain, redirect_mode, clicks, created_at");
+    .select("id, sub_id, slug, link_name, domain, redirect_mode, link_type, clicks, created_at");
   if (insertError) return error("Gagal membuat link.", 500, { detail: insertError.message });
 
   return json({ ok: true, redirects: created || [] });

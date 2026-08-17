@@ -248,6 +248,7 @@ function RealtimeView() {
   const newestRef = useRef(null);
   const lastSoundAt = useRef(0);
   const burstRef = useRef({ n: 0, timer: null });
+  const sseOkRef = useRef(false);
 
   useEffect(() => {
     if (typeof window === "undefined" || !("Notification" in window)) return;
@@ -376,6 +377,14 @@ function RealtimeView() {
       return;
     }
 
+    sseOkRef.current = false;
+    es.onopen = () => {
+      sseOkRef.current = true;
+    };
+    es.onerror = () => {
+      sseOkRef.current = false;
+    };
+
     const onTraffic = (e) => {
       try {
         handleLive(JSON.parse(e.data), "traffic");
@@ -390,6 +399,7 @@ function RealtimeView() {
     es.addEventListener("traffic", onTraffic);
     es.addEventListener("conversion", onConversion);
     return () => {
+      sseOkRef.current = false;
       es.close();
     };
   }, [handleLive]);
@@ -400,6 +410,7 @@ function RealtimeView() {
     let stopped = false;
     const poll = async () => {
       if (stopped || document.hidden) return;
+      if (sseOkRef.current) return;
       try {
         const params = new URLSearchParams({ range });
         if (filterSubId !== "all") params.set("sub_id", filterSubId);

@@ -27,8 +27,11 @@ export async function POST(request) {
     .maybeSingle();
   if (loadError) return error("Gagal memuat kredensial.", 500);
 
-  const match = await comparePassword(oldPassword, data?.password_hash || "");
-  if (!match) return error("Password lama salah.", 401);
+  const res = await comparePassword(oldPassword, data?.password_hash || "");
+  if (res.legacy) {
+    return error("Kredensial admin belum dimigrasi — jalankan migrasi password dulu.", 401);
+  }
+  if (!res.ok) return error("Password lama salah.", 401);
 
   const { error: updateError } = await supabase
     .from("admin_access")

@@ -1,6 +1,7 @@
 import { error, json, requireSession } from "@/lib/api";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { startOfConversionDay, rangeBounds } from "@/lib/conversion-day";
+import { groupBy, groupCount, sumWhere } from "@/lib/aggregate";
 
 export const dynamic = "force-dynamic";
 
@@ -19,33 +20,23 @@ const CONV_COLS =
   "id, redirect_id, sub_id, network_name, country, earning, ip_address, browser_app, os_device, created_at";
 
 async function fetchConversions(supabase, fromISO, toISO, subId) {
-  const page = 1000;
   const colsList = [CONV_COLS_APP, CONV_COLS];
   let lastError = null;
   for (const cols of colsList) {
-    const all = [];
-    let start = 0;
-    let ok = true;
-    for (;;) {
-      let q = supabase
-        .from("conversions")
-        .select(cols)
-        .gte("created_at", fromISO)
-        .lte("created_at", toISO)
-        .order("created_at", { ascending: false })
-        .range(start, start + page - 1);
-      if (subId && subId !== "all") q = q.eq("sub_id", subId);
-      const { data, error } = await q;
-      if (error) {
-        lastError = error;
-        ok = false;
-        break;
-      }
-      all.push(...(data || []));
-      if (!data || data.length < page) break;
-      start += page;
+    let q = supabase
+      .from("conversions")
+      .select(cols)
+      .gte("created_at", fromISO)
+      .lte("created_at", toISO)
+      .order("created_at", { ascending: false })
+      .limit(100);
+    if (subId && subId !== "all") q = q.eq("sub_id", subId);
+    const { data, error } = await q;
+    if (error) {
+      lastError = error;
+      continue;
     }
-    if (ok) return { data: all };
+    return { data };
   }
   return { data: [], error: lastError };
 }
@@ -66,41 +57,21 @@ async function fetchFeed(supabase, fromISO, toISO) {
   return res;
 }
 
-async function fetchRangeRows(supabase, table, columns, fromISO, toISO) {
-  const page = 1000;
-  const all = [];
-  let start = 0;
-  for (;;) {
-    const { data, error } = await supabase
-      .from(table)
-      .select(columns)
-      .gte("created_at", fromISO)
-      .lte("created_at", toISO)
-      .range(start, start + page - 1);
-    if (error) return { data: all, error };
-    all.push(...(data || []));
-    if (!data || data.length < page) return { data: all };
-    start += page;
-  }
-}
-
-function aggregateReport(subIdList, trafficRows, convRows) {
+function aggregateReport(subIdList, trafficMap, convMap) {
   const map = new Map();
   (subIdList || []).forEach((sub) => {
     if (sub) map.set(sub, { sub_id: sub, network_name: "Trafee", clicks: 0, conversions: 0, earning: 0 });
   });
-  trafficRows.forEach((t) => {
-    if (!t.sub_id) return;
-    const cur = map.get(t.sub_id) || { sub_id: t.sub_id, network_name: "Trafee", clicks: 0, conversions: 0, earning: 0 };
-    cur.clicks += 1;
-    map.set(t.sub_id, cur);
+  trafficMap.forEach((count, sub) => {
+    const cur = map.get(sub) || { sub_id: sub, network_name: "Trafee", clicks: 0, conversions: 0, earning: 0 };
+    cur.clicks = count;
+    map.set(sub, cur);
   });
-  convRows.forEach((c) => {
-    if (!c.sub_id) return;
-    const cur = map.get(c.sub_id) || { sub_id: c.sub_id, network_name: "Trafee", clicks: 0, conversions: 0, earning: 0 };
-    cur.conversions += 1;
-    cur.earning += Number(c.earning) || 0;
-    map.set(c.sub_id, cur);
+  convMap.forEach((v, sub) => {
+    const cur = map.get(sub) || { sub_id: sub, network_name: "Trafee", clicks: 0, conversions: 0, earning: 0 };
+    cur.conversions = v.count;
+    cur.earning += v.sum;
+    map.set(sub, cur);
   });
   return [...map.values()]
     .map((v) => ({ ...v, earning: parseFloat(v.earning.toFixed(2)) }))
@@ -158,44 +129,24 @@ export async function GET(request) {
   }
   const [trafficCount, convCount] = await Promise.all([countTraffic, countConvs]);
 
-  const [reportRes, topTodayRes, topCountriesRes, totalEarnRes] = await Promise.all([
-    Promise.all([
-      fetchRangeRows(supabase, "traffic_logs", "sub_id", fromISO, toISO),
-      fetchRangeRows(supabase, "conversions", "sub_id, earning", fromISO, toISO),
-    ]),
-    supabase
-      .from("conversions")
-      .select("sub_id, earning")
-      .gte("created_at", todayISO),
-    supabase
-      .from("conversions")
-      .select("country")
-      .gte("created_at", todayISO),
-    supabase.from("conversions").select("earning"),
+  const rangeFilter = (qq) => qq.gte("created_at", fromISO).lte("created_at", toISO);
+
+  const [reportTraffic, reportConvs, topToday, topCountries, allEarning] = await Promise.all([
+    groupCount("traffic_logs", "sub_id", rangeFilter),
+    groupBy("conversions", "sub_id", "earning", rangeFilter),
+    groupBy("conversions", "sub_id", "earning", (qq) => qq.gte("created_at", todayISO)),
+    groupCount("conversions", "country", (qq) => qq.gte("created_at", todayISO)),
+    sumWhere("conversions", "earning"),
   ]);
 
-  const [reportTraffic, reportConvs] = reportRes;
-  const report = aggregateReport(subIds, reportTraffic.data || [], reportConvs.data || []);
+  const report = aggregateReport(subIds, reportTraffic, reportConvs);
 
-  const rangeConvs = (reportConvs.data || []).filter((c) => !subId || subId === "all" || c.sub_id === subId);
-
-  const topMap = new Map();
-  (topTodayRes.data || []).forEach((c) => {
-    const cur = topMap.get(c.sub_id) || { sub_id: c.sub_id, conversions: 0, earning: 0 };
-    cur.conversions += 1;
-    cur.earning += Number(c.earning) || 0;
-    topMap.set(c.sub_id, cur);
-  });
-  const topToday = [...topMap.values()]
-    .map((v) => ({ ...v, earning: parseFloat(v.earning.toFixed(2)) }))
+  const topTodayList = [...topToday.entries()]
+    .map(([sub_id, v]) => ({ sub_id, conversions: v.count, earning: parseFloat(v.sum.toFixed(2)) }))
     .sort((a, b) => b.earning - a.earning)
     .slice(0, 10);
 
-  const countryMap = new Map();
-  (topCountriesRes.data || []).forEach((c) => {
-    if (c.country) countryMap.set(c.country, (countryMap.get(c.country) || 0) + 1);
-  });
-  const topCountries = [...countryMap.entries()]
+  const topCountriesList = [...topCountries.entries()]
     .map(([country, count]) => ({ country, count }))
     .sort((a, b) => b.count - a.count)
     .slice(0, 8);
@@ -203,12 +154,14 @@ export async function GET(request) {
   const totals = {
     clicks: trafficCount.count || 0,
     conversions: convCount.count || 0,
-    earning: parseFloat(rangeConvs.reduce((s, c) => s + (Number(c.earning) || 0), 0).toFixed(2)),
+    earning: parseFloat(
+      (
+        subId && subId !== "all"
+          ? reportConvs.get(subId)?.sum || 0
+          : [...reportConvs.values()].reduce((s, v) => s + v.sum, 0)
+      ).toFixed(2)
+    ),
   };
-
-  const allEarning = parseFloat(
-    (totalEarnRes.data || []).reduce((s, c) => s + (Number(c.earning) || 0), 0).toFixed(2)
-  );
 
   if (errors.length && !feed.length && !convs.length) {
     return error("Gagal memuat data.", 500, { detail: errors[0] });
@@ -223,8 +176,8 @@ export async function GET(request) {
     feed: filteredFeed,
     conversions: filteredConvs,
     report,
-    topToday,
-    topCountries,
+    topToday: topTodayList,
+    topCountries: topCountriesList,
     subIds,
     redirectById,
   });

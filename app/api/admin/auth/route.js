@@ -47,8 +47,11 @@ export async function POST(request) {
 
   if (dbError) return error("Gagal memuat kredensial.", 500, { detail: dbError.message });
 
-  const ok = await comparePassword(password, data?.password_hash || "");
-  if (!ok) return error("Password salah.", 401);
+  const res = await comparePassword(password, data?.password_hash || "");
+  if (res.legacy) {
+    return error("Kredensial admin belum dimigrasi — jalankan migrasi password dulu.", 401);
+  }
+  if (!res.ok) return error("Password salah.", 401);
 
   const token = await createSession("admin", { name: "Administrator" });
   const response = json({

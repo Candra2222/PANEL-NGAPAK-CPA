@@ -9,7 +9,6 @@ function sessionPayload(p, request) {
     panel_id: p.id,
     sub_id: p.sub_id,
     panel_name: p.panel_name,
-    smartlink_url: p.smartlink_url,
     domains: redirectDomains(request),
   };
 }
@@ -32,7 +31,7 @@ export async function GET(request) {
   const supabase = supabaseAdmin();
   const { data: panel, error: dbError } = await supabase
     .from("panels")
-    .select("id, sub_id, panel_name, smartlink_url, is_active")
+    .select("id, sub_id, panel_name, is_active")
     .eq("id", session.panel_id)
     .maybeSingle();
   if (dbError || !panel || !panel.is_active) return error("Sesi tidak valid.", 401);
@@ -61,18 +60,27 @@ export async function POST(request) {
   const supabase = supabaseAdmin();
   const { data: panels, error: dbError } = await supabase
     .from("panels")
-    .select("id, sub_id, panel_name, smartlink_url, password_hash, is_active")
+    .select("id, sub_id, panel_name, password_hash, is_active")
     .eq("is_active", true);
   if (dbError) return error("Gagal memuat kredensial.", 500, { detail: dbError.message });
 
   let matched = null;
+  let sawLegacy = false;
   for (const p of panels || []) {
-    if (await comparePassword(password, p.password_hash)) {
+    const res = await comparePassword(password, p.password_hash);
+    if (res.legacy) {
+      sawLegacy = true;
+      continue;
+    }
+    if (res.ok) {
       matched = p;
       break;
     }
   }
 
+  if (!matched && sawLegacy) {
+    return error("Ada password member yang belum dimigrasi — hubungi admin untuk reset password.", 401);
+  }
   if (!matched) return error("Password salah atau Sub ID dinonaktifkan.", 401);
 
   await supabase.from("panels").update({ last_login_at: new Date().toISOString() }).eq("id", matched.id);

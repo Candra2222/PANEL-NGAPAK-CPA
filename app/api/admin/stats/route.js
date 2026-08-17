@@ -1,5 +1,6 @@
 import { error, json, requireSession } from "@/lib/api";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { dailyAggregate, groupBy } from "@/lib/aggregate";
 
 const DAYS = 14;
 const iso = (d) => d.toISOString().slice(0, 10);
@@ -10,28 +11,51 @@ export async function GET() {
 
   const supabase = supabaseAdmin();
 
-  const [panelsRes, redirectsRes, trafficRes, convsRes, recentRes] = await Promise.all([
+  const start = new Date(Date.now() - (DAYS - 1) * 86400000);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(Date.now() + 86400000);
+  end.setHours(0, 0, 0, 0);
+  const startISO = start.toISOString();
+  const endISO = end.toISOString();
+
+  const [
+    panelsRes,
+    redirectsRes,
+    trafficTotalRes,
+    convTotalRes,
+    convByPanel,
+    trafficDaily,
+    convDaily,
+    recentRes,
+  ] = await Promise.all([
     supabase.from("panels").select("id, sub_id, panel_name, is_active, last_login_at"),
     supabase.from("redirects").select("panel_id, clicks"),
-    supabase.from("traffic_logs").select("created_at"),
-    supabase.from("conversions").select("panel_id, earning, created_at"),
+    supabase.from("traffic_logs").select("id", { count: "exact", head: true }),
+    supabase.from("conversions").select("id", { count: "exact", head: true }),
+    groupBy("conversions", "panel_id", "earning"),
+    dailyAggregate("traffic_logs", null, startISO, endISO),
+    dailyAggregate("conversions", "earning", startISO, endISO),
     supabase
       .from("conversions")
-      .select("panel_id, network_name, country, earning, created_at")
+      .select("id, panel_id, network_name, country, earning, created_at")
       .order("created_at", { ascending: false })
       .limit(20),
   ]);
 
-  if (panelsRes.error || redirectsRes.error || trafficRes.error || convsRes.error || recentRes.error) {
+  if (
+    panelsRes.error ||
+    redirectsRes.error ||
+    trafficTotalRes.error ||
+    convTotalRes.error ||
+    recentRes.error
+  ) {
     return error("Gagal memuat statistik.", 500);
   }
 
   const panels = panelsRes.data || [];
   const redirects = redirectsRes.data || [];
-  const conversions = convsRes.data || [];
-  const panelsById = new Map(panels.map((p) => [p.id, p]));
 
-  const totalEarning = conversions.reduce((s, c) => s + Number(c.earning || 0), 0);
+  const totalEarning = [...convByPanel.values()].reduce((s, v) => s + v.sum, 0);
 
   const linksByPanel = {};
   redirects.forEach((r) => {
@@ -41,17 +65,11 @@ export async function GET() {
     linksByPanel[r.panel_id].clicks += r.clicks || 0;
   });
 
-  const earningByPanel = {};
-  conversions.forEach((c) => {
-    if (!c.panel_id) return;
-    earningByPanel[c.panel_id] = (earningByPanel[c.panel_id] || 0) + Number(c.earning || 0);
-  });
-
   const topPanels = panels
     .map((p) => ({
       panel_id: p.id,
       sub_id: p.sub_id,
-      earning: parseFloat((earningByPanel[p.id] || 0).toFixed(2)),
+      earning: parseFloat((convByPanel.get(p.id)?.sum || 0).toFixed(2)),
     }))
     .sort((a, b) => b.earning - a.earning)
     .slice(0, 8);
@@ -60,37 +78,29 @@ export async function GET() {
   const convByDay = {};
   const earningByDay = {};
   const trafficByDay = {};
-  const start = new Date(Date.now() - (DAYS - 1) * 86400000);
-  start.setHours(0, 0, 0, 0);
   for (let i = 0; i < DAYS; i++) {
-    const key = iso(new Date(start.getTime() + i * 86400000));
-    dayLabels.push(new Date(start.getTime() + i * 86400000).toLocaleDateString("id-ID", { day: "2-digit", month: "short" }));
-    convByDay[key] = 0;
-    earningByDay[key] = 0;
-    trafficByDay[key] = 0;
+    const d = new Date(start.getTime() + i * 86400000);
+    dayLabels.push(d.toLocaleDateString("id-ID", { day: "2-digit", month: "short" }));
   }
-  conversions.forEach((c) => {
-    const key = iso(new Date(c.created_at));
-    if (key in convByDay) {
-      convByDay[key] += 1;
-      earningByDay[key] += Number(c.earning || 0);
-    }
+  trafficDaily.forEach((v, key) => {
+    trafficByDay[key] = v.count;
   });
-  (trafficRes.data || []).forEach((t) => {
-    const key = iso(new Date(t.created_at));
-    if (key in trafficByDay) trafficByDay[key] += 1;
+  convDaily.forEach((v, key) => {
+    convByDay[key] = v.count;
+    earningByDay[key] = v.sum;
   });
 
   const chart = dayLabels.map((label, i) => {
     const key = iso(new Date(start.getTime() + i * 86400000));
     return {
       day: label,
-      traffic: trafficByDay[key],
-      conversion: convByDay[key],
-      earning: parseFloat(earningByDay[key].toFixed(2)),
+      traffic: trafficByDay[key] || 0,
+      conversion: convByDay[key] || 0,
+      earning: parseFloat((earningByDay[key] || 0).toFixed(2)),
     };
   });
 
+  const panelsById = new Map(panels.map((p) => [p.id, p]));
   const panelList = panels.map((p) => ({
     id: p.id,
     sub_id: p.sub_id,
@@ -99,7 +109,8 @@ export async function GET() {
     last_login_at: p.last_login_at,
     links: linksByPanel[p.id]?.links || 0,
     clicks: linksByPanel[p.id]?.clicks || 0,
-    earning: parseFloat((earningByPanel[p.id] || 0).toFixed(2)),
+    conversions: convByPanel.get(p.id)?.count || 0,
+    earning: parseFloat((convByPanel.get(p.id)?.sum || 0).toFixed(2)),
   }));
 
   const recent = (recentRes.data || []).map((c) => ({
@@ -118,8 +129,8 @@ export async function GET() {
       panels: panels.length,
       activePanels: panels.filter((p) => p.is_active).length,
       links: redirects.length,
-      traffic: (trafficRes.data || []).length,
-      conversions: conversions.length,
+      traffic: trafficTotalRes.count || 0,
+      conversions: convTotalRes.count || 0,
       earning: parseFloat(totalEarning.toFixed(2)),
     },
     chart,

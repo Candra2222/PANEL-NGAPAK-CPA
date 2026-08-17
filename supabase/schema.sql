@@ -65,6 +65,7 @@ create table if not exists public.redirects (
   og_image text,
   domain text not null default '',
   redirect_mode text not null default 'direct',
+  link_type text not null default 'img',
   clicks integer not null default 0,
   created_at timestamptz not null default now()
 );
@@ -201,6 +202,45 @@ begin
 end;
 $$;
 
+-- Agregat harian (grafik admin/monitor). Dipanggil via REST RPC:
+-- /rest/v1/rpc/daily_aggregate?p_table=traffic_logs&p_value=earning&p_from=...&p_to=...
+-- Hanya kolom/allowlist: traffic_logs | conversions ; earning | null.
+create or replace function public.daily_aggregate(p_table text, p_value text, p_from timestamptz, p_to timestamptz)
+returns table(day date, cnt bigint, total numeric)
+language plpgsql
+security definer
+as $$
+declare
+  tbl_expr text;
+  sum_expr text;
+begin
+  if p_table = 'traffic_logs' then
+    tbl_expr := 'traffic_logs';
+  elsif p_table = 'conversions' then
+    tbl_expr := 'conversions';
+  else
+    raise exception 'unknown table: %', p_table;
+  end if;
+
+  if p_value is null then
+    sum_expr := 'null::numeric';
+  elsif p_value = 'earning' then
+    sum_expr := 'coalesce(sum(earning),0)';
+  else
+    raise exception 'unknown value column: %', p_value;
+  end if;
+
+  return query execute
+    'select created_at::date, count(*)::bigint, ' || sum_expr ||
+    ' from ' || tbl_expr ||
+    ' where created_at >= $1 and created_at <= $2' ||
+    ' group by 1 order by 1'
+    using p_from, p_to;
+end;
+$$;
+
+grant execute on function public.daily_aggregate(text, text, timestamptz, timestamptz) to authenticator;
+
 -- ------------------------------------------------------------------
 -- ROW LEVEL SECURITY — deny by default, TANPA policy
 -- (service_role key melewati RLS; semua query app memakainya)
@@ -220,12 +260,23 @@ alter publication supabase_realtime add table public.traffic_logs;
 alter publication supabase_realtime add table public.conversions;
 
 -- ------------------------------------------------------------------
+-- POSTGREST: aktifkan agregat (count(), sum()) di REST API
+-- (wajib: tanpa ini query ?select=panel_id,count() gagal PGRST123).
+-- ------------------------------------------------------------------
+alter role authenticator set pgrst.db_aggregates_enabled = 'true';
+notify pgrst, 'reload config';
+
+-- ------------------------------------------------------------------
 -- INDEXES
 -- ------------------------------------------------------------------
 create index if not exists idx_traffic_panel    on public.traffic_logs(panel_id);
 create index if not exists idx_traffic_created  on public.traffic_logs(created_at desc);
+create index if not exists idx_traffic_panel_created on public.traffic_logs(panel_id, created_at);
+create index if not exists idx_traffic_sub_created  on public.traffic_logs(sub_id, created_at);
 create index if not exists idx_conversions_panel on public.conversions(panel_id);
 create index if not exists idx_conversions_created on public.conversions(created_at desc);
+create index if not exists idx_conv_panel_created on public.conversions(panel_id, created_at);
+create index if not exists idx_conv_sub_created  on public.conversions(sub_id, created_at);
 create index if not exists idx_redirects_panel  on public.redirects(panel_id);
 create index if not exists idx_panels_sub_id    on public.panels(sub_id);
 

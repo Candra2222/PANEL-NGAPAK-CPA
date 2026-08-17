@@ -11,9 +11,8 @@ import { formatNumber, fullLink } from "@/lib/mock-data";
 import { randomSubdomainPrefix } from "@/lib/links";
 
 export default function PanelDashboard() {
-  const session = getAuthedData("panel") || { sub_id: "—", smartlink_url: "", domains: [] };
+  const session = getAuthedData("panel") || { sub_id: "—", domains: [] };
   const [links, setLinks] = useState([]);
-  const [smartlink, setSmartlink] = useState(session.smartlink_url || "");
   const [panelName, setPanelName] = useState(session.sub_id);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -21,7 +20,7 @@ export default function PanelDashboard() {
   const domains = session.domains?.length ? session.domains : [typeof window !== "undefined" ? window.location.host : ""].filter(Boolean);
   const defaultDomain = domains[0];
 
-  const [tab, setTab] = useState("single");
+  const [tab, setTab] = useState("img");
   const [preview, setPreview] = useState(null);
   const [ogPrompt, setOgPrompt] = useState(false);
   const [deleteAllPrompt, setDeleteAllPrompt] = useState(false);
@@ -52,7 +51,6 @@ export default function PanelDashboard() {
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error("Gagal memuat data."))))
       .then((d) => {
         setLinks(d.redirects || []);
-        setSmartlink(d.panel?.smartlink_url || smartlink);
         setPanelName(d.panel?.sub_id || panelName);
       })
       .catch((e) => pushToast({ title: "Gagal memuat data", body: e.message, tone: "red" }))
@@ -78,7 +76,7 @@ export default function PanelDashboard() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          type: "single",
+          type: "img",
           slug: single.use_random_slug ? undefined : single.slug,
           link_name: panelName,
           domain: single.domain,
@@ -182,7 +180,7 @@ export default function PanelDashboard() {
     <div>
       <PageHeader
         title="Generate Link & Bulk"
-        desc="Link single bisa diatur OG meta; bulk cukup set jumlah & domain lalu langsung generate — destinasi otomatis mengikuti sub id Smartlink."
+        desc="Link img bisa diatur OG meta; bulk cukup set jumlah & domain lalu langsung generate — destinasi otomatis mengikuti sub id Smartlink."
         actions={
           <Badge tone="sky" dot>
             Sub ID: <span className="font-mono">{subId}</span>
@@ -201,10 +199,10 @@ export default function PanelDashboard() {
         <div className="lg:col-span-2 bg-surface border border-line rounded-xl">
           <div className="flex border-b border-line">
             <button
-              onClick={() => setTab("single")}
-              className={`flex-1 py-3 text-sm font-bold transition-colors rounded-tl-xl ${tab === "single" ? "text-emerald bg-surface-2 border-b-2 border-emerald" : "text-muted hover:text-foreground"}`}
+              onClick={() => setTab("img")}
+              className={`flex-1 py-3 text-sm font-bold transition-colors rounded-tl-xl ${tab === "img" ? "text-emerald bg-surface-2 border-b-2 border-emerald" : "text-muted hover:text-foreground"}`}
             >
-              Single Link
+              Img Generate
             </button>
             <button
               onClick={() => setTab("bulk")}
@@ -220,13 +218,9 @@ export default function PanelDashboard() {
                 <span className="text-xs text-muted shrink-0">Nama Link</span>
                 <span className="text-sm font-bold text-right">{panelName}</span>
               </div>
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-xs text-muted shrink-0">Destinasi</span>
-                <span className="text-[11px] text-muted break-all text-right">{smartlink}</span>
-              </div>
             </div>
 
-            {tab === "single" ? (
+            {tab === "img" ? (
               <form onSubmit={createSingle} className="space-y-4">
                 <div>
                   <label className="flex items-center gap-2 text-sm mb-2">
@@ -247,7 +241,7 @@ export default function PanelDashboard() {
                   />
                 </Field>
                 <p className="text-[11px] text-muted/70 -mt-3">
-                  Domain default gratis Cloudflare (workers.dev) — custom domain bisa ditambahkan admin nanti.
+                  silahkan pilih domain manual atau random.
                 </p>
                 <SubdomainToggle
                   id="sd-single"
@@ -262,7 +256,7 @@ export default function PanelDashboard() {
                   onRandomize={() => setSingle({ ...single, subdomain_prefix: randomSubdomainPrefix() })}
                   prefix={single.use_subdomain ? single.subdomain_prefix : ""}
                   domain={single.use_subdomain ? single.domain : ""}
-                  label="Single"
+                  label="Img"
                 />
                 <RedirectModeField value={single.redirect_mode} onChange={(v) => setSingle({ ...single, redirect_mode: v })} />
                 <Field label="OG Title">
@@ -300,7 +294,7 @@ export default function PanelDashboard() {
                   </Field>
                 </div>
                 <p className="text-[11px] text-muted/70 -mt-2">
-                  Domain default gratis Cloudflare (workers.dev) — custom domain bisa ditambahkan admin nanti.
+                  silahkan pilih domain manual atau random.
                 </p>
                 <SubdomainToggle
                   id="sd-bulk"
@@ -351,9 +345,10 @@ export default function PanelDashboard() {
               <thead className="sticky top-0 bg-surface">
                 <tr className="text-left text-xs text-muted uppercase tracking-wide border-b border-line">
                   <th className="px-5 py-3 font-semibold">Nama</th>
-                  <th className="px-5 py-3 font-semibold">Slug</th>
+                  <th className="px-5 py-3 font-semibold">Link Siap Sebar</th>
+                  <th className="px-5 py-3 font-semibold">Jenis Link</th>
                   <th className="px-5 py-3 font-semibold text-right">Klik</th>
-                  <th className="px-5 py-3 font-semibold text-right">Link</th>
+                  <th className="px-5 py-3 font-semibold text-right">Aksi</th>
                 </tr>
               </thead>
               <tbody>
@@ -361,19 +356,30 @@ export default function PanelDashboard() {
                   <tr key={l.id} className="border-b border-line/50 last:border-0 hover:bg-surface-2/50">
                     <td className="px-5 py-3">
                       <div className="font-semibold font-mono text-xs text-emerald">{l.sub_id}</div>
-                      <div className="text-xs text-muted truncate max-w-[200px]" title={l.destination_url}>{l.destination_url}</div>
                       {l.redirect_mode === "spinner" && (
                         <div className="text-[10px] text-amber-300 mt-0.5">spinner 2s</div>
                       )}
                     </td>
-                    <td className="px-5 py-3 font-mono text-xs text-muted">{l.slug}</td>
+                    <td className="px-5 py-3">
+                      <code
+                        className="flex-1 text-xs text-emerald break-all truncate max-w-[240px]"
+                        title={fullLink(l.slug, l.domain || defaultDomain)}
+                      >
+                        {fullLink(l.slug, l.domain || defaultDomain)}
+                      </code>
+                    </td>
+                    <td className="px-5 py-3">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${l.link_type === "bulk" ? "bg-sky-500/15 text-sky-300" : "bg-emerald-500/15 text-emerald-300"}`}>
+                        {l.link_type || "img"}
+                      </span>
+                    </td>
                     <td className="px-5 py-3 text-right tabular-nums">{formatNumber(l.clicks)}</td>
                     <td className="px-5 py-3 text-right">
                       <div className="flex items-center justify-end gap-1.5">
+                        <CopyButton text={fullLink(l.slug, l.domain || defaultDomain)} />
                         <button onClick={() => setPreview(l)} className="p-1.5 rounded-lg text-muted hover:text-emerald hover:bg-emerald/10 transition-colors" title="Lihat">
                           <Icon name="eye" className="w-4 h-4" />
                         </button>
-                        <CopyButton text={fullLink(l.slug, l.domain || defaultDomain)} />
                         <button onClick={() => confirmDeleteLink(l)} className="p-1.5 rounded-lg text-muted hover:text-red-400 hover:bg-red-500/10 transition-colors" title="Hapus">
                           <Icon name="trash" className="w-4 h-4" />
                         </button>
@@ -383,14 +389,14 @@ export default function PanelDashboard() {
                 ))}
                 {!loading && links.length === 0 && (
                   <tr>
-                    <td colSpan={4} className="px-5 py-10 text-center text-muted">
+                    <td colSpan={5} className="px-5 py-10 text-center text-muted">
                       Belum ada link. Buat link pertama kamu di kolom sebelah kiri.
                     </td>
                   </tr>
                 )}
                 {loading && (
                   <tr>
-                    <td colSpan={4} className="px-5 py-10 text-center text-muted">Memuat...</td>
+                    <td colSpan={5} className="px-5 py-10 text-center text-muted">Memuat...</td>
                   </tr>
                 )}
               </tbody>
@@ -483,10 +489,6 @@ export default function PanelDashboard() {
               <Row label="Nama" value={preview.link_name} />
               <Row label="Sub ID" value={preview.sub_id} mono />
               <Row label="Mode Redirect" value={preview.redirect_mode === "spinner" ? "Spinner 2 detik" : "Langsung redirect"} />
-              <div>
-                <div className="text-xs text-muted mb-1">Destinasi (Smartlink admin)</div>
-                <div className="text-xs text-muted break-all">{preview.destination_url}</div>
-              </div>
               <div>
                 <div className="text-xs text-muted mb-1">Link</div>
                 <div className="flex items-center gap-2">

@@ -2,6 +2,7 @@ import { error, json, requireSession } from "@/lib/api";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { hashPassword, MIN_PASSWORD_LENGTH } from "@/lib/password";
 import { detectSubIdParams, isValidUrl, randomPassword } from "@/lib/links";
+import { groupBy } from "@/lib/aggregate";
 
 export async function GET() {
   const { session } = await requireSession("admin");
@@ -9,21 +10,14 @@ export async function GET() {
 
   const supabase = supabaseAdmin();
 
-  const { data: panels, error: panelsError } = await supabase
-    .from("panels")
-    .select("*")
-    .order("created_at", { ascending: false });
+  const [{ data: panels, error: panelsError }, { data: redirects, error: redirectsError }, convByPanel] =
+    await Promise.all([
+      supabase.from("panels").select("*").order("created_at", { ascending: false }),
+      supabase.from("redirects").select("panel_id, clicks"),
+      groupBy("conversions", "panel_id", "earning"),
+    ]);
   if (panelsError) return error("Gagal memuat daftar member.", 500, { detail: panelsError.message });
-
-  const { data: redirects, error: redirectsError } = await supabase
-    .from("redirects")
-    .select("panel_id, clicks");
   if (redirectsError) return error("Gagal memuat statistik link.", 500);
-
-  const { data: conversions, error: conversionsError } = await supabase
-    .from("conversions")
-    .select("panel_id, earning");
-  if (conversionsError) return error("Gagal memuat statistik konversi.", 500);
 
   const linksByPanel = {};
   redirects.forEach((r) => {
@@ -31,14 +25,6 @@ export async function GET() {
     linksByPanel[r.panel_id] = linksByPanel[r.panel_id] || { links: 0, clicks: 0 };
     linksByPanel[r.panel_id].links += 1;
     linksByPanel[r.panel_id].clicks += r.clicks || 0;
-  });
-
-  const convByPanel = {};
-  conversions.forEach((c) => {
-    if (!c.panel_id) return;
-    convByPanel[c.panel_id] = convByPanel[c.panel_id] || { conversions: 0, earning: 0 };
-    convByPanel[c.panel_id].conversions += 1;
-    convByPanel[c.panel_id].earning += Number(c.earning || 0);
   });
 
   const list = (panels || []).map((p) => ({
@@ -51,8 +37,8 @@ export async function GET() {
     last_login_at: p.last_login_at,
     links: linksByPanel[p.id]?.links || 0,
     clicks: linksByPanel[p.id]?.clicks || 0,
-    conversions: convByPanel[p.id]?.conversions || 0,
-    earning: parseFloat((convByPanel[p.id]?.earning || 0).toFixed(2)),
+    conversions: convByPanel.get(p.id)?.count || 0,
+    earning: parseFloat((convByPanel.get(p.id)?.sum || 0).toFixed(2)),
   }));
 
   return json({ panels: list });

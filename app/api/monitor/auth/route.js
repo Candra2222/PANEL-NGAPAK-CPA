@@ -43,8 +43,11 @@ export async function POST(request) {
     .maybeSingle();
   if (dbError) return error("Gagal memuat kredensial.", 500, { detail: dbError.message });
 
-  const ok = await comparePassword(password, data?.password_hash || "");
-  if (!ok) return error("Password salah.", 401);
+  const res = await comparePassword(password, data?.password_hash || "");
+  if (res.legacy) {
+    return error("Kredensial monitor belum dimigrasi — jalankan migrasi password dulu.", 401);
+  }
+  if (!res.ok) return error("Password salah.", 401);
 
   const token = await createSession("monitor", { name: "Monitor" });
   const response = json({ ok: true, session: { role: "monitor", name: "Monitor" } });

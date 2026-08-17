@@ -2,6 +2,7 @@ import { error, json, requireSession } from "@/lib/api";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { hashPassword, MIN_PASSWORD_LENGTH } from "@/lib/password";
 import { randomPassword } from "@/lib/links";
+import { countSumWhere } from "@/lib/aggregate";
 
 export async function GET(_request, { params }) {
   const { session } = await requireSession("admin");
@@ -10,45 +11,41 @@ export async function GET(_request, { params }) {
   const { id } = await params;
   const supabase = supabaseAdmin();
 
-  const { data: panel, error: panelError } = await supabase
-    .from("panels")
-    .select("*")
-    .eq("id", id)
-    .maybeSingle();
+  const [
+    { data: panel, error: panelError },
+    { data: redirects, error: redirectsError },
+    convAgg,
+    { data: conversions, error: convError },
+    { data: traffic, error: trafficError },
+  ] = await Promise.all([
+    supabase.from("panels").select("*").eq("id", id).maybeSingle(),
+    supabase
+      .from("redirects")
+      .select("id, slug, link_name, destination_url, domain, clicks, created_at")
+      .eq("panel_id", id)
+      .order("created_at", { ascending: false }),
+    countSumWhere("conversions", "earning", (q) => q.eq("panel_id", id)),
+    supabase
+      .from("conversions")
+      .select("network_name, country, earning, created_at")
+      .eq("panel_id", id)
+      .order("created_at", { ascending: false })
+      .limit(100),
+    supabase
+      .from("traffic_logs")
+      .select("ip_address, country, browser_app, os_device, created_at")
+      .eq("panel_id", id)
+      .order("created_at", { ascending: false })
+      .limit(6),
+  ]);
   if (panelError) return error("Gagal memuat member.", 500, { detail: panelError.message });
   if (!panel) return error("Member tidak ditemukan.", 404);
-
-  const { data: redirects, error: redirectsError } = await supabase
-    .from("redirects")
-    .select("id, slug, link_name, destination_url, domain, clicks, created_at")
-    .eq("panel_id", id)
-    .order("created_at", { ascending: false });
   if (redirectsError) return error("Gagal memuat link.", 500);
-
-  const { data: conversionsEarn, error: convError } = await supabase
-    .from("conversions")
-    .select("earning")
-    .eq("panel_id", id);
   if (convError) return error("Gagal memuat konversi.", 500);
-
-  const { data: conversions, error: recentError } = await supabase
-    .from("conversions")
-    .select("network_name, country, earning, created_at")
-    .eq("panel_id", id)
-    .order("created_at", { ascending: false })
-    .limit(100);
-  if (recentError) return error("Gagal memuat konversi terbaru.", 500);
-
-  const { data: traffic, error: trafficError } = await supabase
-    .from("traffic_logs")
-    .select("ip_address, country, browser_app, os_device, created_at")
-    .eq("panel_id", id)
-    .order("created_at", { ascending: false })
-    .limit(6);
   if (trafficError) return error("Gagal memuat traffic.", 500);
 
-  const clicks = redirects.reduce((s, r) => s + r.clicks, 0);
-  const earning = (conversionsEarn || []).reduce((s, c) => s + Number(c.earning || 0), 0);
+  const clicks = (redirects || []).reduce((s, r) => s + r.clicks, 0);
+  const earning = convAgg.sum || 0;
 
   return json({
     panel: {
@@ -59,14 +56,14 @@ export async function GET(_request, { params }) {
       is_active: panel.is_active,
       created_at: panel.created_at,
       last_login_at: panel.last_login_at,
-      links: redirects.length,
+      links: (redirects || []).length,
       clicks,
-      conversions: (conversionsEarn || []).length,
+      conversions: convAgg.count || 0,
       earning: parseFloat(earning.toFixed(2)),
     },
-    redirects,
-    conversions,
-    traffic,
+    redirects: redirects || [],
+    conversions: conversions || [],
+    traffic: traffic || [],
   });
 }
 
