@@ -1,24 +1,39 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import PageHeader from "@/components/PageHeader";
 import Badge from "@/components/Badge";
 import StatCard from "@/components/StatCard";
 import { Icon } from "@/components/icons";
 import { pushToast } from "@/components/ToastStack";
-import { mockDomains } from "@/lib/mock-data";
 
 export default function AdminDomains() {
-  const [domains, setDomains] = useState(mockDomains);
+  const [domains, setDomains] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [adding, setAdding] = useState(false);
 
   const [addForm, setAddForm] = useState({ name: "" });
+
+  const fetchDomains = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/domains");
+      const data = await res.json();
+      if (data.domains) setDomains(data.domains);
+    } catch {
+      pushToast({ title: "Gagal memuat domain", tone: "red" });
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { fetchDomains(); }, [fetchDomains]);
 
   const activeCount = domains.filter((d) => d.is_active).length;
   const verifiedCount = domains.filter((d) => d.dns_status === "verified").length;
 
-  const addDomain = (e) => {
+  const addDomain = async (e) => {
     e.preventDefault();
     const full = addForm.name.trim().toLowerCase();
     if (!full) {
@@ -29,48 +44,75 @@ export default function AdminDomains() {
       pushToast({ title: "Domain sudah ada", body: full, tone: "red" });
       return;
     }
-    const nd = {
-      id: "d" + Date.now(),
-      name: full,
-      zone: full,
-      is_active: true,
-      dns_status: "pending",
-      added_at: new Date().toISOString(),
-    };
-    setDomains((prev) => [nd, ...prev]);
-    setShowAdd(false);
-    setAddForm({ name: "" });
-    pushToast({ title: "Domain ditambahkan", body: "Setup DNS manual di Cloudflare." });
+
+    setAdding(true);
+    try {
+      const res = await fetch("/api/admin/domains", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: full }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        pushToast({ title: "Gagal", body: data.error || "Terjadi kesalahan.", tone: "red" });
+        return;
+      }
+      setDomains((prev) => [data.domain, ...prev]);
+      setShowAdd(false);
+      setAddForm({ name: "" });
+      pushToast({ title: "Domain ditambahkan", body: `${full} — Custom Domain & Route aktif di Cloudflare.`, tone: "emerald" });
+    } catch {
+      pushToast({ title: "Gagal menghubungi server", tone: "red" });
+    } finally {
+      setAdding(false);
+    }
   };
 
-  const toggleActive = (id) => {
-    setDomains((prev) => prev.map((d) => (d.id === id ? { ...d, is_active: !d.is_active } : d)));
+  const toggleActive = async (id) => {
     const d = domains.find((x) => x.id === id);
-    pushToast({
-      title: d.is_active ? "Domain dinonaktifkan" : "Domain diaktifkan",
-      body: d.name,
-      tone: d.is_active ? "amber" : "emerald",
-    });
+    if (!d) return;
+    try {
+      const res = await fetch(`/api/admin/domains/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ is_active: !d.is_active }),
+      });
+      const data = await res.json();
+      if (res.ok && data.domain) {
+        setDomains((prev) => prev.map((x) => (x.id === id ? data.domain : x)));
+        pushToast({
+          title: d.is_active ? "Domain dinonaktifkan" : "Domain diaktifkan",
+          body: d.name,
+          tone: d.is_active ? "amber" : "emerald",
+        });
+      }
+    } catch {
+      pushToast({ title: "Gagal update domain", tone: "red" });
+    }
   };
 
-  const markVerified = (id) => {
-    setDomains((prev) => prev.map((d) => (d.id === id ? { ...d, dns_status: "verified" } : d)));
-    const d = domains.find((x) => x.id === id);
-    pushToast({ title: "DNS ditandai verified", body: d.name, tone: "emerald" });
-  };
-
-  const deleteDomain = () => {
+  const deleteDomain = async () => {
     if (!deleteTarget) return;
-    setDomains((prev) => prev.filter((d) => d.id !== deleteTarget.id));
+    try {
+      const res = await fetch(`/api/admin/domains/${deleteTarget.id}`, { method: "DELETE" });
+      const data = await res.json();
+      if (res.ok) {
+        setDomains((prev) => prev.filter((d) => d.id !== deleteTarget.id));
+        pushToast({ title: "Domain dihapus", body: deleteTarget.name, tone: "red" });
+      } else {
+        pushToast({ title: "Gagal hapus", body: data.error, tone: "red" });
+      }
+    } catch {
+      pushToast({ title: "Gagal menghubungi server", tone: "red" });
+    }
     setDeleteTarget(null);
-    pushToast({ title: "Domain dihapus", body: deleteTarget.name, tone: "red" });
   };
 
   return (
     <div>
       <PageHeader
         title="Domain / DNS"
-        desc="Kelola domain redirect link (shortener). Tambahkan nama domain, lalu setup record DNS-nya secara manual di Cloudflare."
+        desc="Kelola domain redirect. Tambah domain → otomatis terprovisi di Cloudflare (Custom Domain + Route)."
         actions={
           <button
             onClick={() => setShowAdd(true)}
@@ -84,102 +126,121 @@ export default function AdminDomains() {
 
       <div className="grid sm:grid-cols-3 gap-4 mb-6">
         <StatCard icon="globe" label="Total Domain" value={domains.length} tone="emerald" />
-        <StatCard icon="check" label="Aktif" value={activeCount} sub="Dipakai di Panel 2" tone="sky" />
+        <StatCard icon="check" label="Aktif" value={activeCount} sub="Dipakai di Panel Member" tone="sky" />
         <StatCard icon="shield" label="DNS Verified" value={verifiedCount} tone="violet" />
       </div>
 
       <div className="bg-surface border border-line rounded-xl overflow-hidden">
         <div className="px-5 py-4 border-b border-line">
           <h2 className="font-bold">Daftar Domain Redirect</h2>
-          <p className="text-xs text-muted mt-0.5">Setup DNS dilakukan manual di Cloudflare — setelah selesai, tandai Verified.</p>
+          <p className="text-xs text-muted mt-0.5">Domain otomatis terprovisi sebagai Custom Domain + Route di Cloudflare Worker.</p>
         </div>
         <div className="cpa-table-wrap">
-          <table className="w-full text-sm cpa-table">
-            <thead>
-              <tr className="text-left text-xs text-muted uppercase tracking-wide border-b border-line">
-                <th className="px-5 py-3 font-semibold">Domain</th>
-                <th className="px-5 py-3 font-semibold">Status</th>
-                <th className="px-5 py-3 font-semibold">Tgl Pemasangan</th>
-                <th className="px-5 py-3 font-semibold text-right">Aksi</th>
-              </tr>
-            </thead>
-            <tbody>
-              {domains.map((d) => (
-                <tr key={d.id} className="border-b border-line/50 last:border-0 hover:bg-surface-2/50">
-                  <td className="px-5 py-3">
-                    <div className="font-semibold font-mono text-sm">{d.name}</div>
-                  </td>
-                  <td className="px-5 py-3">
-                    {d.dns_status === "verified" ? (
-                      <Badge tone="green" dot>Verified</Badge>
-                    ) : (
-                      <Badge tone="amber" dot>Pending</Badge>
-                    )}
-                    <div className="mt-1">
-                      <Badge tone={d.is_active ? "sky" : "gray"}>{d.is_active ? "Aktif" : "Nonaktif"}</Badge>
-                    </div>
-                  </td>
-                  <td className="px-5 py-3 text-xs text-muted">
-                    {d.added_at
-                      ? new Date(d.added_at).toLocaleString("id-ID", {
-                          day: "2-digit",
-                          month: "short",
-                          year: "numeric",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })
-                      : "—"}
-                  </td>
-                  <td className="px-5 py-3">
-                    <div className="flex items-center justify-end gap-1">
-                      {d.dns_status === "pending" && (
-                        <button
-                          onClick={() => markVerified(d.id)}
-                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-semibold border border-line text-muted hover:text-emerald hover:border-emerald/40 transition-colors"
-                        >
-                          <Icon name="shield" className="w-3.5 h-3.5" />
-                          Tandai Verified
-                        </button>
-                      )}
-                      <button
-                        onClick={() => toggleActive(d.id)}
-                        className={`p-2 rounded-lg transition-colors ${d.is_active ? "text-muted hover:text-amber-400 hover:bg-amber-500/10" : "text-muted hover:text-emerald hover:bg-emerald/10"}`}
-                        title={d.is_active ? "Nonaktifkan" : "Aktifkan"}
-                      >
-                        <Icon name="shield" className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => setDeleteTarget(d)}
-                        className="p-2 rounded-lg text-muted hover:text-red-400 hover:bg-red-500/10 transition-colors"
-                        title="Hapus domain"
-                      >
-                        <Icon name="trash" className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </td>
+          {loading ? (
+            <div className="px-5 py-10 text-center text-muted text-sm">Memuat domain...</div>
+          ) : (
+            <table className="w-full text-sm cpa-table">
+              <thead>
+                <tr className="text-left text-xs text-muted uppercase tracking-wide border-b border-line">
+                  <th className="px-5 py-3 font-semibold">Domain</th>
+                  <th className="px-5 py-3 font-semibold">Status</th>
+                  <th className="px-5 py-3 font-semibold">Tgl Pemasangan</th>
+                  <th className="px-5 py-3 font-semibold text-right">Aksi</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {domains.map((d) => (
+                  <tr key={d.id} className="border-b border-line/50 last:border-0 hover:bg-surface-2/50">
+                    <td className="px-5 py-3">
+                      <div className="font-semibold font-mono text-sm">{d.name}</div>
+                      {d.zone_id && (
+                        <div className="text-[10px] text-muted mt-0.5">Zone: {d.zone_id.slice(0, 12)}...</div>
+                      )}
+                    </td>
+                    <td className="px-5 py-3">
+                      {d.dns_status === "verified" ? (
+                        <Badge tone="green" dot>Verified</Badge>
+                      ) : (
+                        <Badge tone="amber" dot>Pending</Badge>
+                      )}
+                      <div className="mt-1">
+                        <Badge tone={d.is_active ? "sky" : "gray"}>{d.is_active ? "Aktif" : "Nonaktif"}</Badge>
+                      </div>
+                    </td>
+                    <td className="px-5 py-3 text-xs text-muted">
+                      {d.added_at
+                        ? new Date(d.added_at).toLocaleString("id-ID", {
+                            day: "2-digit",
+                            month: "short",
+                            year: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })
+                        : "—"}
+                    </td>
+                    <td className="px-5 py-3">
+                      <div className="flex items-center justify-end gap-1">
+                        <button
+                          onClick={() => toggleActive(d.id)}
+                          className={`p-2 rounded-lg transition-colors ${d.is_active ? "text-muted hover:text-amber-400 hover:bg-amber-500/10" : "text-muted hover:text-emerald hover:bg-emerald/10"}`}
+                          title={d.is_active ? "Nonaktifkan" : "Aktifkan"}
+                        >
+                          <Icon name="shield" className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => setDeleteTarget(d)}
+                          className="p-2 rounded-lg text-muted hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                          title="Hapus domain"
+                        >
+                          <Icon name="trash" className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {!loading && domains.length === 0 && (
+                  <tr>
+                    <td colSpan={4} className="px-5 py-10 text-center text-muted">
+                      Belum ada domain. Klik &quot;Tambah Domain&quot; untuk menambah.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          )}
         </div>
       </div>
 
       {showAdd && (
-        <Modal title="Tambah Domain Redirect" onClose={() => setShowAdd(false)}>
+        <Modal title="Tambah Domain Redirect" onClose={() => !adding && setShowAdd(false)}>
           <form onSubmit={addDomain} className="space-y-4">
             <Field label="Nama Domain">
-              <input value={addForm.name} onChange={(e) => setAddForm({ name: e.target.value })} placeholder="contoh: fumifun.sbs atau go.fumifun.sbs" className={inputCls} autoFocus />
+              <input
+                value={addForm.name}
+                onChange={(e) => setAddForm({ name: e.target.value })}
+                placeholder="contoh: fumifun.sbs atau go.fumifun.sbs"
+                className={inputCls}
+                autoFocus
+                disabled={adding}
+              />
             </Field>
-            <div className="bg-sky-500/10 border border-sky-500/30 rounded-lg px-3.5 py-3 text-xs text-sky-300 flex gap-2">
+            <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg px-3.5 py-3 text-xs text-emerald-300 flex gap-2">
               <Icon name="globe" className="w-4 h-4 shrink-0 mt-0.5" />
-              Setelah ditambahkan, buka Cloudflare → DNS → Records → buat record A/CNAME untuk domain ini, lalu tandai Verified di panel.
+              <div>
+                <div className="font-semibold mb-1">Otomatis terprovisi di Cloudflare:</div>
+                <ul className="list-disc list-inside space-y-0.5 text-emerald-200/80">
+                  <li>Custom Domain diaktifkan untuk Worker</li>
+                  <li>Wildcard Route (*.domain/*) ditambahkan</li>
+                </ul>
+                <div className="mt-1.5 text-emerald-300/70">Pastikan domain sudah terdaftar di zona Cloudflare yang sama.</div>
+              </div>
             </div>
             <div className="flex gap-2 justify-end pt-1">
-              <button type="button" onClick={() => setShowAdd(false)} className="px-4 py-2 rounded-lg border border-line text-sm font-semibold text-muted hover:text-foreground transition-colors">
+              <button type="button" onClick={() => setShowAdd(false)} disabled={adding} className="px-4 py-2 rounded-lg border border-line text-sm font-semibold text-muted hover:text-foreground transition-colors">
                 Batal
               </button>
-              <button type="submit" className="px-4 py-2 rounded-lg bg-emerald text-navy text-sm font-bold hover:bg-emerald-dim transition-colors">
-                Tambah Domain
+              <button type="submit" disabled={adding} className="px-4 py-2 rounded-lg bg-emerald text-navy text-sm font-bold hover:bg-emerald-dim transition-colors disabled:opacity-50">
+                {adding ? "Memproses..." : "Tambah Domain"}
               </button>
             </div>
           </form>
@@ -189,7 +250,7 @@ export default function AdminDomains() {
       {deleteTarget && (
         <Modal title="Hapus Domain" onClose={() => setDeleteTarget(null)}>
           <div className="bg-red-500/10 border border-red-500/30 rounded-lg px-3.5 py-3 text-sm text-red-300 mb-5">
-            Kamu akan menghapus domain <span className="font-mono font-semibold text-red-200">{deleteTarget.name}</span>. Domain yang masih dipakai member untuk generate link akan berhenti berfungsi. Yakin mau lanjut?
+            Kamu akan menghapus domain <span className="font-mono font-semibold text-red-200">{deleteTarget.name}</span> dari Cloudflare dan database. Custom Domain & Route akan dihapus. Yakin mau lanjut?
           </div>
           <div className="flex gap-2">
             <button onClick={() => setDeleteTarget(null)} className="flex-1 py-2.5 rounded-lg border border-line text-sm font-semibold text-muted hover:text-foreground transition-colors">

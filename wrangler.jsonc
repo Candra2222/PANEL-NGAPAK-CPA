@@ -7,10 +7,13 @@
   "workers_dev": true,
   "routes": [
     { "pattern": "fumifun.sbs", "custom_domain": true },
-    { "pattern": "*.fumifun.sbs/*", "zone_id": "68e15cd444172b48aedf873b42eae7a7" }
+    { "pattern": "*.fumifun.sbs/*", "zone_id": "68e15cd444172b48aedf873b42eae7a7" },
+    { "pattern": "girlsnaughty.fun", "custom_domain": true },
+    { "pattern": "*.girlsnaughty.fun/*", "zone_id": "62821714268e73ced59bf953753af84f" }
   ],
   "vars": {
-    "REDIRECT_DOMAIN": "fumifun.sbs"
+    "REDIRECT_DOMAIN": "fumifun.sbs",
+    "CF_ACCOUNT_ID": "e73f8c488e7c99fa50964beeda3e7a83"
   },
   "assets": {
     "directory": ".open-next/assets",

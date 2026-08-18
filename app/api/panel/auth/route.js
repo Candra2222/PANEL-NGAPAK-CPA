@@ -4,16 +4,24 @@ import { comparePassword } from "@/lib/password";
 import { createSession } from "@/lib/session";
 import { checkRateLimit, clientIp } from "@/lib/rate-limit";
 
-function sessionPayload(p, request) {
+async function sessionPayload(p, supabase, request) {
   return {
     panel_id: p.id,
     sub_id: p.sub_id,
     panel_name: p.panel_name,
-    domains: redirectDomains(request),
+    domains: await redirectDomains(supabase, request),
   };
 }
 
-function redirectDomains(request) {
+async function redirectDomains(supabase, request) {
+  try {
+    const { data } = await supabase
+      .from("domains")
+      .select("name")
+      .eq("is_active", true)
+      .order("added_at", { ascending: true });
+    if (data && data.length) return data.map((d) => d.name);
+  } catch {}
   const env = process.env.REDIRECT_DOMAINS;
   if (env) return env.split(",").map((d) => d.trim()).filter(Boolean);
   if (process.env.REDIRECT_DOMAIN) return [process.env.REDIRECT_DOMAIN];
@@ -36,7 +44,7 @@ export async function GET(request) {
     .maybeSingle();
   if (dbError || !panel || !panel.is_active) return error("Sesi tidak valid.", 401);
 
-  return json({ ok: true, session: sessionPayload(panel, request) });
+  return json({ ok: true, session: await sessionPayload(panel, supabase, request) });
 }
 
 export async function POST(request) {
@@ -90,6 +98,6 @@ export async function POST(request) {
     sub_id: matched.sub_id,
     panel_name: matched.panel_name,
   });
-  const response = json({ ok: true, session: sessionPayload(matched, request) });
+  const response = json({ ok: true, session: await sessionPayload(matched, supabase, request) });
   return setSessionCookie(response, "panel", token);
 }

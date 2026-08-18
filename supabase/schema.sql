@@ -108,6 +108,20 @@ create table if not exists public.conversions (
 );
 
 -- ------------------------------------------------------------------
+-- DOMAINS: domain redirect yang terdaftar + provisioning Cloudflare
+-- ------------------------------------------------------------------
+create table if not exists public.domains (
+  id uuid primary key default gen_random_uuid(),
+  name text not null unique,
+  zone_id text,
+  cf_domain_id text,
+  cf_route_id text,
+  is_active boolean not null default true,
+  dns_status text not null default 'pending',
+  added_at timestamptz not null default now()
+);
+
+-- ------------------------------------------------------------------
 -- RATE LIMITS: pencegah brute-force login & abuse postback
 -- ------------------------------------------------------------------
 create table if not exists public.rate_limits (
@@ -251,6 +265,7 @@ alter table public.panels         enable row level security;
 alter table public.redirects      enable row level security;
 alter table public.traffic_logs   enable row level security;
 alter table public.conversions    enable row level security;
+alter table public.domains        enable row level security;
 alter table public.rate_limits    enable row level security;
 
 -- ------------------------------------------------------------------
@@ -279,5 +294,6 @@ create index if not exists idx_conv_panel_created on public.conversions(panel_id
 create index if not exists idx_conv_sub_created  on public.conversions(sub_id, created_at);
 create index if not exists idx_redirects_panel  on public.redirects(panel_id);
 create index if not exists idx_panels_sub_id    on public.panels(sub_id);
+create index if not exists idx_domains_name     on public.domains(name);
 
 commit;
