@@ -77,13 +77,21 @@ export async function handler(request) {
     return json({ ok: false, error: "Gagal memuat panel." }, { status: 500 });
   }
 
-  const { data: lastTraffic } = await supabase
+  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+  const { data: trafficLogs } = await supabase
     .from("traffic_logs")
-    .select("app, browser_app, os_device, ip_address")
+    .select("app, browser_app, os_device, ip_address, created_at")
     .eq("sub_id", subId)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .gte("created_at", oneHourAgo)
+    .order("created_at", { ascending: false });
+
+  const nowTs = Date.now();
+  const lastTraffic = trafficLogs?.length
+    ? trafficLogs.reduce((best, row) => {
+        const diff = Math.abs(nowTs - new Date(row.created_at).getTime());
+        return diff < best.diff ? { row, diff } : best;
+      }, { row: trafficLogs[0], diff: Infinity }).row
+    : null;
 
   const insert = {
     panel_id: panel?.id || null,
@@ -91,7 +99,7 @@ export async function handler(request) {
     network_name: "Trafee",
     country: country || null,
     earning: isFinite(earning) && earning > 0 ? earning : 0,
-    ip_address: ip || (requestIp && requestIp !== "unknown" ? requestIp : null) || lastTraffic?.ip_address || null,
+    ip_address: ip || lastTraffic?.ip_address || null,
     browser_app: browser || lastTraffic?.browser_app || null,
     os_device: os || lastTraffic?.os_device || null,
     app: app || lastTraffic?.app || null,

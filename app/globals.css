@@ -350,10 +350,22 @@ body {
   }
 }
 
-/* Desktop — keep the original 60vh cap */
+/* Desktop — slightly taller box & compact font */
 @media (min-width: 1024px) {
   .cpa-table-wrap {
-    max-height: clamp(320px, 60vh, 800px);
+    max-height: clamp(320px, 65vh, 900px);
+  }
+  .cpa-table {
+    font-size: 13px;
+  }
+  .cpa-table th {
+    font-size: 11px;
+    padding-top: 0.4rem;
+    padding-bottom: 0.4rem;
+  }
+  .cpa-table td {
+    padding-top: 0.35rem;
+    padding-bottom: 0.35rem;
   }
 }
 

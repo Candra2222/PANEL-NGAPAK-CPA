@@ -17,6 +17,44 @@ const CONV_COLS_APP =
 const CONV_COLS =
   "id, redirect_id, sub_id, network_name, country, earning, ip_address, browser_app, os_device, created_at";
 
+async function enrichConversionsIp(supabase, convs, fromISO, toISO) {
+  const missing = convs.filter((c) => !c.ip_address);
+  if (!missing.length) return convs;
+
+  const subIds = [...new Set(missing.map((c) => c.sub_id).filter(Boolean))];
+  const trafficBySub = new Map();
+
+  await Promise.all(
+    subIds.map(async (sid) => {
+      const { data } = await supabase
+        .from("traffic_logs")
+        .select("sub_id, ip_address, created_at")
+        .eq("sub_id", sid)
+        .gte("created_at", fromISO)
+        .lte("created_at", toISO)
+        .order("created_at", { ascending: true });
+      if (data) trafficBySub.set(sid, data);
+    })
+  );
+
+  return convs.map((c) => {
+    if (c.ip_address) return c;
+    const logs = trafficBySub.get(c.sub_id);
+    if (!logs || !logs.length) return c;
+    const convTime = new Date(c.created_at).getTime();
+    let best = logs[0];
+    let bestDiff = Math.abs(convTime - new Date(best.created_at).getTime());
+    for (let i = 1; i < logs.length; i++) {
+      const diff = Math.abs(convTime - new Date(logs[i].created_at).getTime());
+      if (diff < bestDiff) {
+        best = logs[i];
+        bestDiff = diff;
+      }
+    }
+    return bestDiff <= 60 * 60 * 1000 ? { ...c, ip_address: best.ip_address } : c;
+  });
+}
+
 export async function GET(request) {
   const { session } = await requireSession("monitor");
   if (!session) return error("Belum login.", 401);
@@ -72,9 +110,12 @@ export async function GET(request) {
     });
   }
 
+  const convs = convRes.data || [];
+  const enrichedConvs = await enrichConversionsIp(supabase, convs, sinceISO, toISO);
+
   return json({
     sinceISO,
     traffic: trafficRes.data || [],
-    conversions: convRes.data || [],
+    conversions: enrichedConvs,
   });
 }
